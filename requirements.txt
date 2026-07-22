@@ -1,0 +1,13 @@
+# Core dependencies for the evaluators, baselines, and QA validators in src/
+# and for notebooks/quickstart_kalman.ipynb.
+pandas>=2.0
+numpy>=1.24
+pyarrow>=14.0
+scipy>=1.10
+
+# Optional, notebook plots only.
+matplotlib>=3.7
+
+# The organizer-side scripts under scripts/ (raw PeMS extraction, OSM->GMNS
+# network construction) additionally require osm2gmns and requests; they are
+# not needed by participants and are intentionally not pinned here.

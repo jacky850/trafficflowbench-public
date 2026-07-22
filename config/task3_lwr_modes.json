@@ -1,0 +1,21 @@
+{
+  "policy_version": "qa-lwr-coverage-v1",
+  "minimum_valid_cells": 100000,
+  "thresholds": {
+    "mode_a_coverage": 0.75,
+    "mode_b_coverage": 0.25,
+    "ramp_cell_pct_observed": 75
+  },
+  "panels": {
+    "D7_I10_E": {"mode": "B", "coverage": 0.256787, "valid_cells": 265583},
+    "D7_I10_W": {"mode": "B", "coverage": 0.337698, "valid_cells": 346255},
+    "D7_I210_E": {"mode": "B", "coverage": 0.300014, "valid_cells": 262143},
+    "D7_I210_W": {"mode": "B", "coverage": 0.359895, "valid_cells": 343344},
+    "D7_I405_N": {"mode": "C", "coverage": 0.067935, "valid_cells": 62388},
+    "D7_I405_S": {"mode": "C", "coverage": 0.043962, "valid_cells": 44292},
+    "D12_I5_N": {"mode": "A", "coverage": 0.761247, "valid_cells": 760175},
+    "D12_I5_S": {"mode": "B", "coverage": 0.652854, "valid_cells": 622831},
+    "D12_I405_N": {"mode": "B", "coverage": 0.457164, "valid_cells": 220108},
+    "D12_I405_S": {"mode": "B", "coverage": 0.460420, "valid_cells": 192940}
+  }
+}
