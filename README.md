@@ -208,15 +208,7 @@ within each panel/condition group.
 For one forecast window, let Qhat be the predicted set of queued link-time
 cells and Q* the hidden reference set:
 
-$$
-\mathrm{IoU}_{ST}
-=
-\frac{
-\left|Q_{\mathrm{pred}}\cap Q_{\mathrm{true}}\right|
-}{
-\left|Q_{\mathrm{pred}}\cup Q_{\mathrm{true}}\right|
-}.
-$$
+$$\mathrm{IoU}_{ST}=\frac{|Q_{\mathrm{pred}}\cap Q_{\mathrm{true}}|}{|Q_{\mathrm{pred}}\cup Q_{\mathrm{true}}|}$$
 
 In plain notation:
 
@@ -317,41 +309,23 @@ with the released path and zone identifiers.
 Let f* be the organizer reference path flow, fhat the submitted path flow,
 A the released path-link incidence matrix, and c the reference link counts:
 
-$$
-S_{od}
-=\max\left(0,1-\frac{\sum_j|\widehat f_j-f_j^*|}
-{\max(\sum_j f_j^*,\varepsilon)}\right),
-$$
+$$S_{od}=\max\left(0,1-\frac{\sum_j|f_j^{pred}-f_j^{ref}|}{\max(\sum_j f_j^{ref},\varepsilon)}\right)$$
 
-$$
-S_{link}
-=\max\left(0,1-\frac{\sum_\ell|(A\widehat f)_\ell-c_\ell|}
-{\max(\sum_\ell c_\ell,\varepsilon)}\right).
-$$
+$$S_{link}=\max\left(0,1-\frac{\sum_\ell|(Af^{pred})_\ell-c_\ell|}{\max(\sum_\ell c_\ell,\varepsilon)}\right)$$
 
 With weak prior b:
 
-$$
-D_{\mathrm{hat}}=\sum_j|\widehat f_j-b_j|,
-\qquad
-D^*=\sum_j|f_j^*-b_j|,
-$$
+$$D_{pred}=\sum_j|f_j^{pred}-b_j|,\qquad D_{ref}=\sum_j|f_j^{ref}-b_j|$$
 
-$$
-S_{dev}=\exp\left(-\left|\frac{D_{\mathrm{hat}}}{D^*}-1\right|\right).
-$$
+$$S_{dev}=\exp\left(-\left|\frac{D_{pred}}{D_{ref}}-1\right|\right)$$
 
 The attraction score is:
 
-$$
-S_{attr}=\max\left(0,1-0.5\|\widehat a-a^*\|_1\right).
-$$
+$$S_{attr}=\max\left(0,1-0.5\|a^{pred}-a^{ref}\|_1\right)$$
 
 The final ODME score is:
 
-$$
-S_{ODME}=0.45S_{od}+0.25S_{link}+0.15S_{dev}+0.15S_{attr}.
-$$
+$$S_{ODME}=0.45S_{od}+0.25S_{link}+0.15S_{dev}+0.15S_{attr}$$
 
 Invalid IDs, illegal paths, mismatched zones, duplicate keys, missing paths,
 negative flows, or non-finite values invalidate the affected panel.
