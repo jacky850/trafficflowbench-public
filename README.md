@@ -209,9 +209,13 @@ For one forecast window, let Qhat be the predicted set of queued link-time
 cells and Q* the hidden reference set:
 
 $$
-\operatorname{IoU}_{ST}
-=\frac{|Q_{\mathrm{pred}}\cap Q_{\mathrm{true}}|}
-       {|Q_{\mathrm{pred}}\cup Q_{\mathrm{true}}|}.
+\mathrm{IoU}_{ST}
+=
+\frac{
+\left|Q_{\mathrm{pred}}\cap Q_{\mathrm{true}}\right|
+}{
+\left|Q_{\mathrm{pred}}\cup Q_{\mathrm{true}}\right|
+}.
 $$
 
 In plain notation:
