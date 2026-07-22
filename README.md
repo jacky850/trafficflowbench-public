@@ -44,6 +44,26 @@ One composite leaderboard score
 Public validation is for self-diagnostics. It is not a substitute for the
 hidden Kaggle evaluation set and is not a leaderboard claim.
 
+### End-to-end workflow
+
+~~~mermaid
+flowchart LR
+    A["Kaggle public data<br/>train + validation"] --> B["Task 1<br/>masked state reconstruction"]
+    B --> C["Complete monthly state<br/>speed + flow + derived density"]
+    C --> D["Task 3<br/>FD and LWR consistency"]
+    C --> E["Task 4<br/>dynamic OD/path flow"]
+    F["60-minute history at T"] --> G["Task 2<br/>30-minute queue forecast"]
+    B --> H["Unified submission.csv"]
+    G --> H
+    D --> H
+    E --> H
+    H --> I["Kaggle private evaluation"]
+    I --> J["S_total leaderboard score"]
+~~~
+
+Tasks 1, 3, and 4 use the offline monthly state/data setting. Task 2 is an
+online short-term forecast and uses its own released forecast-window index.
+
 ## Corridor coverage and time split
 
 The release contains five corridor families and ten directional panels:
@@ -66,6 +86,15 @@ PeMS did not publish station files for 2025-11-28 and 2025-11-29. Those dates
 are excluded from the task indices; they are not treated as imputed values.
 April through June 2026 are not part of the public train/validation release
 because of inadequate D12 I-405 observation quality.
+
+### Release coverage figures
+
+The following figures summarize the public observation-quality audit and the
+uniform train/validation split:
+
+![Monthly source quality by panel and month](docs/assets/monthly-source-quality.svg)
+
+![Public train and validation split](docs/assets/data-split.svg)
 
 ## Data channels and quality rule
 
@@ -180,9 +209,16 @@ For one forecast window, let Qhat be the predicted set of queued link-time
 cells and Q* the hidden reference set:
 
 $$
-\mathrm{IoU}_{ST}
-=\frac{|\widehat{Q}\cap Q^*|}{|\widehat{Q}\cup Q^*|}.
+\operatorname{IoU}_{ST}
+=\frac{|Q_{\mathrm{pred}}\cap Q_{\mathrm{true}}|}
+       {|Q_{\mathrm{pred}}\cup Q_{\mathrm{true}}|}.
 $$
+
+In plain notation:
+
+~~~text
+IoU_ST = |Q_pred intersection Q_true| / |Q_pred union Q_true|
+~~~
 
 If both sets are empty, the score is 1. Missing required prediction rows
 receive a score of 0 for the affected cells. Normal and disruption windows
@@ -192,6 +228,16 @@ families, and family scores are averaged equally.
 Due to insufficient public ramp-observation quality, D12_I405_N and
 D12_I405_S are excluded from Task 2 scoring only. They remain part of Tasks
 1, 3, and 4.
+
+### Task 2 workflow
+
+~~~mermaid
+flowchart LR
+    A["60 minutes observed<br/>through origin T"] --> B["Participant model"]
+    B --> C["queue_pred = 0 or 1<br/>for T+5 ... T+30"]
+    C --> D["Space-time IoU<br/>per forecast window"]
+    D --> E["Equal normal/disruption<br/>panel average"]
+~~~
 
 ## Task 3 — Physical consistency
 
@@ -234,6 +280,19 @@ The three coverage modes are fixed by the released public ramp audit:
 The mode is a fixed organizer-released evaluation choice, not a participant
 hyperparameter. S_qkv is diagnostic only because density is derived from
 submitted flow and speed.
+
+### Task 3 workflow
+
+~~~mermaid
+flowchart LR
+    A["Task 1 reconstructed<br/>monthly state"] --> B["Derive density<br/>k = q / v"]
+    C["Network topology<br/>lanes + capacities"] --> D["FD check"]
+    E["Mainline and ramp<br/>flow fields"] --> F["LWR conservation check"]
+    B --> D
+    A --> F
+    D --> G["S_physics"]
+    F --> G
+~~~
 
 ## Task 4 — Dynamic ODME and path-flow recovery
 
@@ -292,6 +351,17 @@ $$
 
 Invalid IDs, illegal paths, mismatched zones, duplicate keys, missing paths,
 negative flows, or non-finite values invalidate the affected panel.
+
+### Task 4 workflow
+
+~~~mermaid
+flowchart LR
+    A["Released paths + zones"] --> C["Path-flow estimate"]
+    B["Incidence matrix A<br/>and count context"] --> C
+    C --> D["Load paths onto links"]
+    D --> E["S_od + S_link + S_dev + S_attr"]
+    E --> F["S_ODME"]
+~~~
 
 ## Overall leaderboard score
 
@@ -387,4 +457,3 @@ materials derived from OpenStreetMap must retain the attribution:
 
 Participants must comply with the competition rules, applicable source-data
 terms, and the licenses stated on the Kaggle Data page.
-
