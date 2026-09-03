@@ -50,6 +50,12 @@ exactly this.
 Those dates are synthetic and match no real period. Do not read anything into
 the year.
 
+`validation` and `private` were generated independently of each other. They are
+different months, with their own demand draws and their own incident schedules:
+five incidents in validation, seven in private, at different times and places.
+Neither is a held-out sample of the other, so a model fitted until it reproduces
+validation has learned that month rather than the corridor.
+
 ## What you can and cannot score yourself
 
 | Task | Score it locally? | Why |
