@@ -230,11 +230,8 @@ S_physics = (1/3)*S_FD + (2/3)*S_LWR
 ```
 
 `S_FD` asks whether your speed and flow could coexist on a real road at all. It
-is a validity check rather than a ranking signal, and it does its job at the
-bottom of the range. A submission claiming three times the flow at free-flow
-speed scores 0.74 on it. Any plausible answer clears it comfortably, which is why
-it carries the smaller weight: a perfect answer scores 0.9903 and the baseline
-0.9897, and that difference is not where a competition is decided.
+is a validity check rather than a ranking signal, which is why it carries the
+smaller weight. Any plausible answer clears it.
 
 `S_LWR` is where the score is really won. It measures how badly conservation is
 violated, it falls steadily as error grows, and it goes to zero for a

@@ -113,13 +113,10 @@ S_physics = (1/3)*S_FD + (2/3)*S_LWR
 
 The two terms do different jobs, and the weights reflect that. `S_FD` is a
 validity check: it separates the physically possible from the impossible, not the
-good from the better. Measured on `D12_I5_N` validation, a perfect answer scores
-0.9903 and the enhanced baseline 0.9897, while a submission claiming three times
-the flow at free-flow speed scores 0.7420.
+good from the better.
 
 `S_LWR` carries the discrimination. It falls monotonically with injected error
-and sends a congestion-erasing submission to zero. On the same three
-submissions it reads 0.9446, 0.4947 and 0.0000. Which
+and sends a congestion-erasing submission to zero. Which
 transitions are scored depends on the corridor's coverage mode, published in
 [`TASK3_LWR_COVERAGE_MODES.md`](TASK3_LWR_COVERAGE_MODES.md).
 
