@@ -3,21 +3,24 @@
 One runnable baseline per task, in `src/`. They exist to give you a starting
 point and a number to beat, not to be strong.
 
-## Task 1: profile plus interpolation
+## Task 1: the historical mean
 
-`src/task1/baseline_task1_enhanced.py` combines a weekday × time-of-day flow and
-speed profile learned from `train` with same-day temporal and spatial
-interpolation around each blanked cell. The builder emits exactly the required
-row set:
+`src/task1/baseline_task1_historical_mean.py` learns one weekday by
+time-of-day profile of speed and flow per link from `train`, and predicts that
+profile at every blanked cell. The builder emits exactly the required row set:
 
 ```bash
 python src/task1/build_task1_baseline_submission.py \
   --release-root $REL --split train --output state_submission.csv
 ```
 
-`baseline_task1_historical_mean.py` is the simpler comparison. Profile only, no
-interpolation. `baseline_task1_structural_kf.py` is optional teaching code that
-runs a structural Kalman filter per link.
+It uses nothing from the day it is reconstructing. Not the neighbouring links at
+that moment, not the same link an hour earlier, not the shape of the queue that
+is visibly forming around the gap. Every one of those is available to you, and
+using any of them is the first thing that beats this.
+
+`baseline_task1_structural_kf.py` is optional teaching code that runs a
+structural Kalman filter per link.
 
 ## Task 2: persistence
 
@@ -50,9 +53,8 @@ released weak prior, and `lambda = 0.05`.
 
 ## What the reference baselines score
 
-The organizers scored a deliberately naive baseline per task against a perfect
-submission, averaged over the ten corridors on the validation split. Task 1 here
-is the historical-mean baseline, weaker than the enhanced one shipped above.
+Each baseline above, scored against a perfect submission and averaged over the
+ten corridors on the validation split.
 
 | | Naive baseline | Perfect answer |
 |---|---:|---:|

@@ -30,7 +30,7 @@ python src/task1/score_task1.py \
 
 ```
 
-On one corridor the shipped baseline scores about `S_state` 0.91 on train.
+On `D12_I5_N` the shipped baseline scores `S_state` 0.6252 on train.
 
 Task 3 needs no file of its own. It is scored on this same submission. But it
 cannot be scored locally, for the reason below.

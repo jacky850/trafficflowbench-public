@@ -1,4 +1,4 @@
-"""Build a complete Task 1 submission from the enhanced baseline.
+"""Build a complete Task 1 submission from the historical-mean baseline.
 
 The output contains one row for every eligible masked target cell of the chosen
 split. It is suitable for score_task1.py, and for score_task3.py, which is
@@ -22,7 +22,6 @@ import pandas as pd
 import sys as _sys, pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
 
-from task1.baseline_task1_enhanced import interpolate, local_matrix
 from task1.baseline_task1_historical_mean import (
     DEFAULT_RELEASE,
     HERE,
@@ -78,11 +77,11 @@ def build_panel_submission(panel: str, release: Path, split: str, output: Path, 
 
         for regime in pd.unique(frame.mask_regime.astype(str)):
             target = blanked & (frame.mask_regime.astype(str) == regime).to_numpy()
-            _, _, _, speed_sum, speed_n, flow_sum, flow_n = local_matrix(frame, link_ids, target)
-            speed_local = interpolate(speed_sum, speed_n, speed_profile["fallback"])
-            flow_local = interpolate(flow_sum, flow_n, flow_profile["fallback"])
-            pred_speed = np.where(known, speed_local[safe_li, tod], base_speed)
-            pred_flow = np.where(known, flow_local[safe_li, tod], base_flow)
+            # The prediction is the link's own weekday and time-of-day mean from
+            # train, and nothing else. It uses no information from the day being
+            # reconstructed, which is the first thing worth improving on.
+            pred_speed = base_speed
+            pred_flow = base_flow
             pred_speed = np.maximum(pred_speed, 0.0)
             pred_flow = np.maximum(pred_flow, 0.0)
 
@@ -111,7 +110,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--release-root", type=Path, default=DEFAULT_RELEASE)
     ap.add_argument("--split", choices=["train", "validation", "private"], default="validation")
-    ap.add_argument("--output", type=Path, default=HERE / "reports" / "task1_enhanced_state_submission.csv")
+    ap.add_argument("--output", type=Path, default=HERE / "reports" / "task1_baseline_state_submission.csv")
     ap.add_argument("--panel", action="append", help="build only selected panel(s), mainly for smoke tests")
     args = ap.parse_args()
     manifest = json.loads((HERE / "config" / "corridors.json").read_text(encoding="utf-8"))

@@ -42,7 +42,7 @@ def read_overall(path: Path, column: str) -> float:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task1", type=Path, default=HERE / "reports" / "task1_enhanced_eval_validation.csv")
+    ap.add_argument("--task1", type=Path, default=HERE / "reports" / "task1_eval_validation.csv")
     ap.add_argument("--task2", type=Path, default=HERE / "reports" / "task2_persistence_eval_validation.csv")
     ap.add_argument("--task3", type=Path, default=HERE / "reports" / "task3_baseline_eval_validation.csv")
     ap.add_argument("--task4", type=Path, default=HERE / "reports" / "task4_eval_validation.csv")

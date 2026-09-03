@@ -150,7 +150,9 @@ Flow RMSE is taken per lane. Against total link flow the same error scored very
 differently on a three-lane and a six-lane corridor, which made corridors
 incomparable on lane count alone.
 
-**Baseline.** A weekday by time-of-day profile plus local interpolation:
+**Baseline.** The historical mean. One weekday by time-of-day profile per link,
+learned from `train` and replayed at every blanked cell, using nothing from the
+day being reconstructed:
 
 ```bash
 python src/task1/build_task1_baseline_submission.py \
