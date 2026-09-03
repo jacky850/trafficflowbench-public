@@ -27,6 +27,7 @@ from task1.baseline_task1_historical_mean import (
     REGIMES,
     SPEED_NORMALIZER,
     SPEED_WEIGHT,
+    check_release_root,
     lane_vector,
     station_lanes,
 )
@@ -96,6 +97,7 @@ def read_submission(path: Path) -> tuple[pd.DataFrame, list[str]]:
 
 
 def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame) -> list[dict]:
+    check_release_root(release, panel)
     paths = release_files(release, panel, split)
     if not paths:
         raise FileNotFoundError(

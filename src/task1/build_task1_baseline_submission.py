@@ -27,6 +27,7 @@ from task1.baseline_task1_historical_mean import (
     DEFAULT_RELEASE,
     HERE,
     build_profile,
+    check_release_root,
     masked_files,
     slot_values,
 )
@@ -36,6 +37,7 @@ OUTPUT_COLUMNS = ["panel", "timestamp", "station_id", "link_id", "mask_regime", 
 
 
 def build_panel_submission(panel: str, release: Path, split: str, output: Path, write_header: bool) -> int:
+    check_release_root(release, panel)
     panel_dir = release / "corridors" / panel
     speed_profile, flow_profile, profile_counts = build_profile(panel, panel_dir)
     link_ids = speed_profile["link_ids"]

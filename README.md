@@ -347,6 +347,7 @@ git clone https://github.com/jacky850/trafficflowbench-public.git
 cd trafficflowbench-public
 pip install -r requirements.txt
 
+# replace this with the directory you unpacked the data package into
 REL=/path/to/the/downloaded/data
 
 python src/task1/build_task1_baseline_submission.py \
@@ -354,6 +355,9 @@ python src/task1/build_task1_baseline_submission.py \
 python src/task1/score_task1.py \
   --submission state_submission.csv --release-root $REL --split train --panel D12_I5_N
 ```
+
+`$REL` is the directory holding `corridors/`, `task1/` and the rest. If you leave
+the placeholder in, the first command will tell you so.
 
 One corridor runs in minutes. Drop `--panel` for all ten. Tasks 2 and 3 cannot be
 scored locally, because their labels and boundary flows are withheld, so develop

@@ -192,10 +192,41 @@ def lane_vector(stations: pd.Series, links: pd.Series, lanes_by_key: dict[str, f
     return pd.to_numeric(by_station.fillna(by_link), errors="coerce").fillna(1.0).clip(lower=1.0).to_numpy(dtype=float)
 
 
+def check_release_root(release: Path, panel: str) -> None:
+    """Fail with the actual reason rather than with an empty file list.
+
+    The usual cause is a --release-root that was never replaced with a real
+    path, and "no partitions found" is a confusing way to say so.
+    """
+    if not release.exists():
+        raise SystemExit(
+            f"--release-root does not exist: {release}\n"
+            "Point it at the directory you unpacked the data package into. "
+            "It should contain corridors/, task1/, task2/, task3/ and task4/."
+        )
+    corridors = release / "corridors"
+    if not corridors.is_dir():
+        raise SystemExit(
+            f"--release-root has no corridors/ directory: {release}\n"
+            "This does not look like the data package. Check that you pointed at "
+            "the unpacked root and not at a subdirectory or the archive."
+        )
+    if not (corridors / panel).is_dir():
+        available = sorted(p.name for p in corridors.iterdir() if p.is_dir())
+        raise SystemExit(
+            f"corridor {panel} not found under {corridors}\n"
+            f"Available: {', '.join(available) if available else '(none)'}"
+        )
+
+
 def build_profile(panel: str, panel_dir: Path) -> tuple[dict, dict, dict]:
     train_files = files(panel_dir, "train")
     if not train_files:
-        raise ValueError(f"{panel}: no public train partitions")
+        raise SystemExit(
+            f"{panel}: no train partitions under {panel_dir / 'train'}\n"
+            "The train split ships the observation layer this baseline learns from. "
+            "Check that the data package was unpacked completely."
+        )
     first = pd.read_parquet(train_files[0], columns=["link_id"])
     link_ids = sorted(first.link_id.astype(str).unique())
     link_index = {link_id: i for i, link_id in enumerate(link_ids)}
