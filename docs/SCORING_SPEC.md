@@ -1,7 +1,7 @@
 # Scoring specification
 
 The normative scoring contract for Release 1.0. The README explains what each
-score means; this page is the exact rule.
+score means. This page is the exact rule.
 
 ## Aggregation
 
@@ -24,10 +24,10 @@ is_score_eligible = pct_observed >= 75 and the required values are non-null
 ```
 
 Only `is_score_eligible` cells are scored. `speed_kmh` and `flow_vph` are the
-only scored channels; occupancy is not scored and density is derived by the
+only scored channels. Occupancy is not scored, and density is derived by the
 evaluator.
 
-## Task 1 — state reconstruction
+## Task 1: state reconstruction
 
 For each masking regime `r` in `{R1, R2, R3}`:
 
@@ -41,7 +41,7 @@ S_state    = mean over r
 `RMSE_flow_per_lane` divides both the submitted and the true flow by the
 station's lane count, from `fd_parameters.csv`, before the residual. Against
 total link flow the 600 scale was roughly five times stricter than the 25 km/h
-speed scale and made corridors incomparable on lane count alone — one
+speed scale and made corridors incomparable on lane count alone. One
 fixed-quality model scored `S_flow` from 0.0086 to 0.3255 across the ten
 corridors. Per lane that spread in `S_state` falls from 0.158 to 0.020.
 
@@ -49,7 +49,7 @@ Mask rates are `R1 = 0.20`, `R2 = 0.30`, `R3 = 0.50`. The submission key is
 `(panel, timestamp, station_id, link_id, mask_regime)`. The mask itself is
 defined in [`MASK_SPEC.md`](MASK_SPEC.md).
 
-## Task 2 — queue forecasting
+## Task 2: queue forecasting
 
 You see 60 minutes of history through the forecast origin `T` and predict a
 binary queue indicator for `T+5 … T+30`. Per window:
@@ -59,7 +59,7 @@ IoU = |Qpred AND Qtrue| / |Qpred OR Qtrue|
 ```
 
 A window that genuinely has no queue and for which none was predicted scores 1.
-The two conditions, `queue_onset` and `queue_ongoing`, carry equal weight; each
+The two conditions, `queue_onset` and `queue_ongoing`, carry equal weight. Each
 contributes 5 windows per corridor and split.
 
 `queue_onset` windows have no queue visible in the history and a queue in the
@@ -76,7 +76,7 @@ the threshold. The threshold is `speed <= v_cut`, `v_cut = 0.60 * free_speed`.
 `D12_I405_N` and `D12_I405_S` are excluded from Task 2 only. They remain in the
 other three tasks.
 
-## Task 3 — physical consistency
+## Task 3: physical consistency
 
 **Task 3 has no submission of its own.** It is scored on the speeds and flows
 you submitted for Task 1. The evaluator derives the physics frame itself:
@@ -89,10 +89,9 @@ r_on, r_off             the released ramp observations
 ```
 
 This removes every free parameter that could be tuned against the physics score
-independently of the state. Before anchoring, a submission could set
-`k = q/v_f` and score `S_FD` 0.9999 instead of an honest 0.8833, or project the
-boundary flows onto the conservation equation and score `S_LWR` 1.0 whatever
-state it had submitted. The only way to move `S_physics` is now to submit a
+independently of the state. Before anchoring, a submission could set `k = q/v_f` and score `S_FD` 0.9999
+instead of an honest 0.8833. Or it could project the boundary flows onto the
+conservation equation and score `S_LWR` 1.0 whatever state it had submitted. The only way to move `S_physics` is now to submit a
 better Task 1 answer.
 
 The fundamental-diagram term is evaluated per lane:
@@ -118,10 +117,10 @@ injected error and sends a congestion-erasing submission to zero. Which
 transitions are scored depends on the corridor's coverage mode, published in
 [`TASK3_LWR_COVERAGE_MODES.md`](TASK3_LWR_COVERAGE_MODES.md).
 
-`S_qkv` appears in the evaluator output as a diagnostic only; derived density
+`S_qkv` appears in the evaluator output as a diagnostic only. Derived density
 makes `q = k*v` an identity.
 
-## Task 4 — OD and path-flow estimation
+## Task 4: OD and path-flow estimation
 
 Let `f*` be the reference path flow, `fhat` the submission, `A` the released
 path-link incidence, `c` the link counts, and `b` the released weak prior:

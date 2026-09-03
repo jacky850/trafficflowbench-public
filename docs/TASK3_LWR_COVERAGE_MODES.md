@@ -1,4 +1,4 @@
-# Task 3 — LWR coverage modes
+# Task 3: LWR coverage modes
 
 Conservation can only be checked where the terms of the conservation equation
 exist. A link with an on-ramp whose flow is unavailable has no measurable
@@ -24,8 +24,8 @@ Mode C: coverage <  0.25  or valid cells <  100,000
 
 ## All ten corridors are Mode A
 
-Detector health in this release is uniform by design — every corridor carries
-the same `pct_observed` distribution — so ramp coverage comes out the same
+Detector health in this release is uniform by design. Every corridor carries the
+same `pct_observed` distribution, so ramp coverage comes out the same
 everywhere, at **0.7560**, and all ten corridors clear the Mode A threshold.
 Nothing is scored under a weaker rule than anything else.
 
@@ -34,9 +34,9 @@ therefore **derived once from the published release and frozen**, rather than
 re-measured at scoring time, so no corridor can drift across the line between
 one evaluation and the next.
 
-It lives in [`../config/task3_lwr_modes.json`](../config/task3_lwr_modes.json),
-which the evaluator reads by default, and it is identical for every participant
-and every run:
+It lives in [`../config/task3_lwr_modes.json`](../config/task3_lwr_modes.json).
+The evaluator reads it by default, and it is identical for every participant and
+every run:
 
 ```bash
 python -c "import json;print({k:v['mode'] for k,v in json.load(open('config/task3_lwr_modes.json'))['panels'].items()})"

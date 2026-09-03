@@ -7,13 +7,13 @@ pip install -r requirements.txt
 ```
 
 Download the data package from the Kaggle Data page and unpack it anywhere.
-Every script takes `--release-root`; the examples below use `$REL`.
+Every script takes `--release-root`. The examples below use `$REL`.
 
 ```bash
 REL=/path/to/trafficflowbench-release
 ```
 
-Add `--panel D12_I5_N` to any command while you iterate — a single corridor runs
+Add `--panel D12_I5_N` to any command while you iterate. A single corridor runs
 in minutes, all ten do not.
 
 ## Task 1, and Task 3 with it
@@ -32,8 +32,8 @@ python src/task1/score_task1.py \
 
 On one corridor the shipped baseline scores about `S_state` 0.91 on train.
 
-Task 3 needs no file of its own — it is scored on this same submission — but
-**it cannot be scored locally**; see below.
+Task 3 needs no file of its own. It is scored on this same submission. But it
+cannot be scored locally, for the reason below.
 
 When you are ready, build the same submission for the split being scored:
 
@@ -46,17 +46,17 @@ python src/task1/build_task1_baseline_submission.py \
 
 `score_task3.py` runs, but the number it prints on the public package is not a
 score. Conservation is checked against organizer boundary flows, which are never
-published — they are the flow field itself, which is the Task 1 answer. Without
+published. Inflow and outflow per link are the flow field itself, which is the
+Task 1 answer. Without
 them the evaluator falls back to applying the topology to your own submitted
-flows, and that is not accurate enough at this resolution: the conservation
-signal is about 0.75% of the accumulated vehicle total, while a topology-derived
-flux misses the true one by about 0.22%. `S_LWR` therefore floors at zero for
-everyone.
+flows. That is not accurate enough at this resolution. The conservation signal is
+about 0.75% of the accumulated vehicle total, and a topology-derived flux misses
+the true one by about 0.22%. So `S_LWR` floors at zero for everyone.
 
 Measured on `D12_I5_N` validation: **a perfect answer scores 0.3301 locally and
 the naive baseline scores 0.3299.** With the organizer flows the same two
 submissions score **0.9598 and 0.3242**. So the local run tells you nothing
-about your Task 3 quality — read the evaluator for the rule, and let the
+about your Task 3 quality. Read the evaluator for the rule, and let the
 leaderboard produce the number.
 
 What does move `S_physics` is the Task 1 answer, and `score_task1.py` does
@@ -86,8 +86,8 @@ python src/task4/score_task4.py \
   --release-root $REL --reference-root task4_odme
 ```
 
-The builder writes both a submission and a locally derived reference, so this
-score is a check that your solver reproduces the released link counts — not an
+The builder writes both a submission and a locally derived reference. So this
+score checks that your solver reproduces the released link counts. It is not an
 estimate of the leaderboard, which compares against organizer path flows you do
 not have.
 

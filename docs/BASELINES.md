@@ -3,7 +3,7 @@
 One runnable baseline per task, in `src/`. They exist to give you a starting
 point and a number to beat, not to be strong.
 
-## Task 1 — profile plus interpolation
+## Task 1: profile plus interpolation
 
 `src/task1/baseline_task1_enhanced.py` combines a weekday × time-of-day flow and
 speed profile learned from `train` with same-day temporal and spatial
@@ -15,11 +15,11 @@ python src/task1/build_task1_baseline_submission.py \
   --release-root $REL --split train --output state_submission.csv
 ```
 
-`baseline_task1_historical_mean.py` is the simpler comparison — profile only, no
+`baseline_task1_historical_mean.py` is the simpler comparison. Profile only, no
 interpolation. `baseline_task1_structural_kf.py` is optional teaching code that
 runs a structural Kalman filter per link.
 
-## Task 2 — persistence
+## Task 2: persistence
 
 `src/task2/build_task2_persistence_submission.py` reads the queue state at the
 forecast origin and repeats it through all six future cells. It uses only the
@@ -30,13 +30,13 @@ python src/task2/build_task2_persistence_submission.py \
   --release-root $REL --split validation --output queue_submission.csv
 ```
 
-## Task 3 — nothing to build
+## Task 3: nothing to build
 
 Task 3 is scored on your Task 1 file, so its baseline is whatever your Task 1
 baseline produces. `src/task3/build_task3_baseline_submission.py` remains for
 the legacy self-contained physics frame and is not a submission route.
 
-## Task 4 — regularised ODME
+## Task 4: regularised ODME
 
 `src/task4/build_task4_odme_artifacts.py` solves the non-negative,
 prior-regularised path-flow problem against the released link counts:

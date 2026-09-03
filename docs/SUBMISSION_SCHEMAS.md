@@ -6,7 +6,7 @@ submission of its own.
 Every file may be scored on its own, or the three may be merged into a single
 task-tagged table with `src/merge_submissions.py`.
 
-## Task 1 — state reconstruction
+## Task 1: state reconstruction
 
 `sample_submission_state.csv`
 
@@ -19,13 +19,13 @@ Key: `(panel, timestamp, station_id, link_id, mask_regime)`.
 Required rows are exactly the eligible masked cells of the split being scored,
 for each of R1, R2 and R3. A missing row is scored as a zero prediction and
 still counts in the RMSE denominator, so a partial submission is valid but
-self-penalising. `speed_kmh` and `flow_vph` are the only scored channels; do
-not add density.
+self-penalising. `speed_kmh` and `flow_vph` are the only scored channels. Do not
+add density.
 
 Note that `station_id` is in the key but not in the mask hash: when several
 stations share a link they are masked together, and each is scored separately.
 
-## Task 2 — queue forecasting
+## Task 2: queue forecasting
 
 `sample_submission_queue.csv`
 
@@ -35,10 +35,10 @@ window_id,timestamp,link_id,queue_pred
 
 `queue_pred` must be 0 or 1. Rows cover the future link-time cells of the
 released window index. A missing row is treated as `queue_pred = 0`. The
-template enumerates the windows of more than one split for convenience; the
+template enumerates the windows of more than one split for convenience. The
 evaluator scores the split you pass with `--split` and ignores the rest.
 
-## Task 4 — OD and path flow
+## Task 4: OD and path flow
 
 `sample_submission_path_flow.csv`
 
@@ -47,10 +47,10 @@ panel,departure_time,path_id,origin_zone,destination_zone,path_flow
 ```
 
 `path_flow` must be finite and non-negative. IDs must come from the released
-per-corridor network assets — do not rename or invent them.
+per-corridor network assets. Do not rename or invent them.
 
 `departure_time` is a **period token, not a timestamp**. The public release
-defines one period per split; the private evaluation announces its own with the
+defines one period per split. The private evaluation announces its own with the
 hidden scenario.
 
 ## Merging
