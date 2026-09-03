@@ -229,9 +229,12 @@ turn on Task 3 alone. The only way to move this score is to submit a better Task
 S_physics = (1/3)*S_FD + (2/3)*S_LWR
 ```
 
-`S_FD` asks whether your speed and flow land on the fundamental diagram. Most
-submissions score well here, and it barely separates a good answer from a bad
-one: across the whole range of submission quality it moves by less than 0.03.
+`S_FD` asks whether your speed and flow could coexist on a real road at all. It
+is a validity check rather than a ranking signal, and it does its job at the
+bottom of the range. A submission claiming three times the flow at free-flow
+speed scores 0.74 on it. Any plausible answer clears it comfortably, which is why
+it carries the smaller weight: a perfect answer scores 0.9903 and the baseline
+0.9897, and that difference is not where a competition is decided.
 
 `S_LWR` is where the score is really won. It measures how badly conservation is
 violated, it falls steadily as error grows, and it goes to zero for a
