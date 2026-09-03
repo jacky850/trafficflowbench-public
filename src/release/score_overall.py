@@ -1,4 +1,11 @@
-"""Aggregate the four task scores into the single V1 leaderboard score."""
+"""Aggregate the four task scores into the single leaderboard score.
+
+This is the reference implementation of the weighting. It is not something you
+can run end to end on the public package: Task 2 labels and the Task 3 boundary
+flows are withheld, so those two reports cannot be produced locally and count as
+zero here. A local total is therefore always lower than a leaderboard total, and
+the two are not comparable.
+"""
 from __future__ import annotations
 
 import argparse
@@ -17,7 +24,11 @@ def read_overall(path: Path, column: str) -> float:
     if not path.exists():
         print(f"WARNING: task report not found, task scored as 0.0: {path}")
         return 0.0
-    d = pd.read_csv(path)
+    try:
+        d = pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        print(f"WARNING: task report is empty, task scored as 0.0: {path}")
+        return 0.0
     rows = d[d.level == "overall"]
     if rows.empty:
         print(f"WARNING: task report has no 'overall' row, task scored as 0.0: {path}")
@@ -58,6 +69,11 @@ def main() -> None:
     if missing:
         print(f"WARNING: task(s) scored 0.0 (missing, empty, or genuinely zero): {missing}")
     print(f"Overall score = {total:.6f} ({100 * total:.2f}/100)")
+    if {"queue", "physics"} & set(missing):
+        print(
+            "NOTE: queue and physics cannot be scored on the public package, so a local "
+            "total is not comparable to the leaderboard. See docs/DATA.md."
+        )
 
 
 if __name__ == "__main__":
