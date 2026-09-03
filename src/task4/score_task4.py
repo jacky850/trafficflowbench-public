@@ -8,6 +8,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Make the sibling task packages importable when this file is run as a script,
+# so no PYTHONPATH is needed.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from task1.baseline_task1_historical_mean import HERE
 from task4.build_task4_odme_artifacts import load_operator
 

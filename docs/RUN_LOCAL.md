@@ -1,104 +1,86 @@
-# Run the public benchmark locally
+# Running locally
 
-This guide assumes that the public Kaggle release has already been downloaded
-and that its local path is stored in `$release`. Raw PeMS downloads, network
-construction, hidden answers, and private-test generation are organizer-only
-and are not part of this repository.
-
-## 1. Install and validate
-
-```powershell
-python -m pip install -r requirements.txt
-python -m compileall -q src
-python -B src\validate_competition_contract.py
+```bash
+git clone https://github.com/jacky850/trafficflowbench-public.git
+cd trafficflowbench-public
+pip install -r requirements.txt
 ```
 
-The root-level `src\score_task*.py`, `src\build_task*.py`, and
-`src\score_overall.py` files are stable compatibility entry points. The actual
-implementations are grouped under `src/task1/` through `src/task4/`.
+Download the data package from the Kaggle Data page and unpack it anywhere.
+Every script takes `--release-root`; the examples below use `$REL`.
 
-## 2. Task 1 — state baseline and score
-
-```powershell
-python -B src\build_task1_baseline_submission.py `
-  --release-root $release `
-  --output reports\task1_enhanced_state_submission.csv
-
-python -B src\score_task1.py `
-  --submission reports\task1_enhanced_state_submission.csv `
-  --release-root $release `
-  --output reports\task1_enhanced_eval_validation.csv
+```bash
+REL=/path/to/trafficflowbench-release
 ```
 
-The builder covers all ten panels and R1/R2/R3. The evaluator scores only
-eligible masked speed and flow cells.
+Add `--panel D12_I5_N` to any command while you iterate — a single corridor runs
+in minutes, all ten do not.
 
-## 3. Task 2 — queue baseline and score
+## Task 1, and Task 3 with it
 
-```powershell
-python -B src\build_task2_persistence_submission.py `
-  --release-root $release `
-  --split validation `
-  --output reports\task2_persistence_validation.csv
+`train` is the only split whose answers are released, so it is the split to
+develop against.
 
-python -B src\score_task2.py `
-  --release-root $release `
-  --truth-file $organizer_truth `
-  --submission reports\task2_persistence_validation.csv `
-  --split validation `
-  --output reports\task2_persistence_eval_validation.csv
+```bash
+python src/task1/build_task1_baseline_submission.py \
+  --release-root $REL --split train --output state_submission.csv
+
+python src/task1/score_task1.py \
+  --submission state_submission.csv --release-root $REL --split train
+
+# Task 3 needs no file of its own - it is scored on the same submission
+python src/task3/score_task3.py \
+  --state-submission state_submission.csv --release-root $REL --split train
 ```
 
-The released queue window index is used as-is; participants do not regenerate
-the organizer's window selection. `$organizer_truth` is an organizer-local path
-to validation truth and is intentionally not part of the public Kaggle package.
+On one corridor the shipped baseline scores about `S_state` 0.91 and
+`S_physics` 0.33 on train. Task 3 is the score to attack: it is low not because
+the physics check is unfair but because a smooth statistical reconstruction does
+not conserve vehicles.
 
-## 4. Task 3 — physics baseline and score
+When you are ready, build the same submission for the split being scored:
 
-Task 3 consumes the completed Task 1 state submission.
-
-```powershell
-python -B src\build_task3_baseline_submission.py `
-  --state-submission reports\task1_enhanced_state_submission.csv `
-  --release-root $release `
-  --output reports\task3_physics_baseline_submission.csv
-
-python -B src\score_task3.py `
-  --state-submission reports\task1_enhanced_state_submission.csv `
-  --physics-submission reports\task3_physics_baseline_submission.csv `
-  --release-root $release `
-  --output reports\task3_eval_validation.csv
+```bash
+python src/task1/build_task1_baseline_submission.py \
+  --release-root $REL --split validation --output state_submission.csv
 ```
 
-The physics submission includes speed, flow, derived density, mainline boundary
-flows, ramp flows, validity flags, and accumulation for all three regimes.
+## Task 2
 
-## 5. Task 4 — ODME baseline and score
-
-```powershell
-python -B src\build_task4_odme_artifacts.py `
-  --release-root $release `
-  --output-root reports\task4_odme
-
-python -B src\score_task4.py `
-  --release-root $release `
-  --submission reports\task4_odme\baseline_submission.csv `
-  --reference-root reports\task4_odme `
-  --output reports\task4_eval_validation.csv
+```bash
+python src/task2/build_task2_persistence_submission.py \
+  --release-root $REL --split validation --output queue_submission.csv
 ```
 
-The local reference is for self-diagnostics only. The official private test uses
-hidden counterfactual truth from the Kaggle private evaluation set.
+Queue labels are withheld for **every** split, including train, so
+`score_task2.py` cannot be run on the public package. It is included because the
+leaderboard runs it, and reading it is the precise definition of the score.
 
-## 6. Overall score
+## Task 4
 
-```powershell
-python -B src\score_overall.py `
-  --task1 reports\task1_enhanced_eval_validation.csv `
-  --task2 reports\task2_persistence_eval_validation.csv `
-  --task3 reports\task3_eval_validation.csv `
-  --task4 reports\task4_eval_validation.csv `
-  --output reports\overall_baseline_score.csv
+```bash
+python src/task4/build_task4_odme_artifacts.py \
+  --release-root $REL --split validation --output-root task4_odme
+
+python src/task4/score_task4.py \
+  --submission task4_odme/baseline_submission.csv \
+  --release-root $REL --reference-root task4_odme
 ```
 
-Reports and generated submissions remain under the ignored `reports/` directory.
+The builder writes both a submission and a locally derived reference, so this
+score is a check that your solver reproduces the released link counts — not an
+estimate of the leaderboard, which compares against organizer path flows you do
+not have.
+
+## The file you upload
+
+```bash
+python src/merge_submissions.py \
+  --state state_submission.csv \
+  --queue queue_submission.csv \
+  --odme  task4_odme/baseline_submission.csv \
+  --output submission.csv
+```
+
+Three files in, one long table out. Task 3 contributes no rows: it is scored on
+the Task 1 rows already in the file.

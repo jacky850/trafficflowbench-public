@@ -1,22 +1,102 @@
 {
   "release_name": "TrafficFlowBench Five-Corridor Public Release",
   "families": [
-    {"family_id": "D7_I10", "district": 7, "freeway": "I-10"},
-    {"family_id": "D7_I210", "district": 7, "freeway": "I-210"},
-    {"family_id": "D7_I405", "district": 7, "freeway": "I-405"},
-    {"family_id": "D12_I5", "district": 12, "freeway": "I-5"},
-    {"family_id": "D12_I405", "district": 12, "freeway": "I-405"}
+    {
+      "family_id": "D7_I10",
+      "district": 7,
+      "freeway": "I-10"
+    },
+    {
+      "family_id": "D7_I210",
+      "district": 7,
+      "freeway": "I-210"
+    },
+    {
+      "family_id": "D7_I405",
+      "district": 7,
+      "freeway": "I-405"
+    },
+    {
+      "family_id": "D12_I5",
+      "district": 12,
+      "freeway": "I-5"
+    },
+    {
+      "family_id": "D12_I405",
+      "district": 12,
+      "freeway": "I-405"
+    }
   ],
   "panels": [
-    {"corridor_id": "D7_I10_E", "family_id": "D7_I10", "district": 7, "freeway_number": 10, "direction": "E"},
-    {"corridor_id": "D7_I10_W", "family_id": "D7_I10", "district": 7, "freeway_number": 10, "direction": "W"},
-    {"corridor_id": "D7_I210_E", "family_id": "D7_I210", "district": 7, "freeway_number": 210, "direction": "E"},
-    {"corridor_id": "D7_I210_W", "family_id": "D7_I210", "district": 7, "freeway_number": 210, "direction": "W"},
-    {"corridor_id": "D7_I405_N", "family_id": "D7_I405", "district": 7, "freeway_number": 405, "direction": "N"},
-    {"corridor_id": "D7_I405_S", "family_id": "D7_I405", "district": 7, "freeway_number": 405, "direction": "S"},
-    {"corridor_id": "D12_I5_N", "family_id": "D12_I5", "district": 12, "freeway_number": 5, "direction": "N"},
-    {"corridor_id": "D12_I5_S", "family_id": "D12_I5", "district": 12, "freeway_number": 5, "direction": "S"},
-    {"corridor_id": "D12_I405_N", "family_id": "D12_I405", "district": 12, "freeway_number": 405, "direction": "N"},
-    {"corridor_id": "D12_I405_S", "family_id": "D12_I405", "district": 12, "freeway_number": 405, "direction": "S"}
+    {
+      "corridor_id": "D7_I10_E",
+      "family_id": "D7_I10",
+      "district": 7,
+      "freeway_number": 10,
+      "direction": "E"
+    },
+    {
+      "corridor_id": "D7_I10_W",
+      "family_id": "D7_I10",
+      "district": 7,
+      "freeway_number": 10,
+      "direction": "W"
+    },
+    {
+      "corridor_id": "D7_I210_E",
+      "family_id": "D7_I210",
+      "district": 7,
+      "freeway_number": 210,
+      "direction": "E"
+    },
+    {
+      "corridor_id": "D7_I210_W",
+      "family_id": "D7_I210",
+      "district": 7,
+      "freeway_number": 210,
+      "direction": "W"
+    },
+    {
+      "corridor_id": "D7_I405_N",
+      "family_id": "D7_I405",
+      "district": 7,
+      "freeway_number": 405,
+      "direction": "N"
+    },
+    {
+      "corridor_id": "D7_I405_S",
+      "family_id": "D7_I405",
+      "district": 7,
+      "freeway_number": 405,
+      "direction": "S"
+    },
+    {
+      "corridor_id": "D12_I5_N",
+      "family_id": "D12_I5",
+      "district": 12,
+      "freeway_number": 5,
+      "direction": "N"
+    },
+    {
+      "corridor_id": "D12_I5_S",
+      "family_id": "D12_I5",
+      "district": 12,
+      "freeway_number": 5,
+      "direction": "S"
+    },
+    {
+      "corridor_id": "D12_I405_N",
+      "family_id": "D12_I405",
+      "district": 12,
+      "freeway_number": 405,
+      "direction": "N"
+    },
+    {
+      "corridor_id": "D12_I405_S",
+      "family_id": "D12_I405",
+      "district": 12,
+      "freeway_number": 405,
+      "direction": "S"
+    }
   ]
 }

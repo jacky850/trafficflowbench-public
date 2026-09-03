@@ -8,7 +8,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Make the sibling task packages importable when this file is run as a script,
+# so no PYTHONPATH is needed.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from task1.baseline_task1_historical_mean import HERE
+from task2.build_task2_persistence_submission import read_window_index
 
 
 REQUIRED = {"window_id", "timestamp", "link_id", "queue_pred"}
@@ -48,6 +54,17 @@ def read_submission(path: Path) -> pd.DataFrame:
 def score_window(target: pd.DataFrame, submission: pd.DataFrame) -> tuple[float, int, int]:
     keys = ["window_id", "timestamp", "link_id"]
     eligible = target[target.is_score_eligible.astype(bool)].copy()
+    if eligible.empty:
+        # No scoreable cell means no evidence, not a perfect forecast. The IoU
+        # convention below returns 1.0 when the union is empty, which is right
+        # when a window genuinely has no queue and none was predicted, but wrong
+        # when the window has nothing to score at all - a window whose cells all
+        # failed the eligibility bar would have taken full marks. And when the
+        # submission is empty too, the object-dtype frame built below fails to
+        # merge against the datetime64 truth, aborting the whole evaluation with
+        # an opaque pandas error rather than scoring the window. score_task1 was
+        # given the same treatment.
+        return 0.0, 0, 0
     pred = submission[keys + ["queue_pred"]] if not submission.empty else pd.DataFrame(columns=keys + ["queue_pred"])
     merged = eligible.merge(pred, on=keys, how="left", validate="one_to_one")
     missing = int(merged.queue_pred.isna().sum())
@@ -65,7 +82,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--submission", type=Path, required=True)
     ap.add_argument("--release-root", type=Path, default=HERE / "data_public" / "kaggle_release")
-    ap.add_argument("--split", choices=["train", "validation"], default="validation")
+    ap.add_argument("--split", choices=["train", "validation", "private"], default="validation")
     ap.add_argument(
         "--truth-file",
         type=Path,
@@ -78,15 +95,15 @@ def main() -> None:
     target_path = args.truth_file.resolve() if args.truth_file else args.release_root.resolve() / "task2" / args.split / "queue_targets.parquet"
     if not target_path.exists():
         raise FileNotFoundError(
-            f"Queue truth not found: {target_path}. Public validation truth is intentionally withheld; "
-            "organizers must pass --truth-file pointing to their private local copy."
+            f"Queue truth not found: {target_path}.\n"
+            "Task 2 queue labels are withheld for every split, so this evaluator cannot be run "
+            "on the public package. Build a submission and let the leaderboard score it."
         )
     target = pd.read_parquet(target_path)
     target["window_id"] = target.window_id.astype(str)
     target["link_id"] = target.link_id.astype(str)
     target["timestamp"] = pd.to_datetime(target.timestamp, utc=True)
-    windows = pd.read_csv(args.release_root.resolve() / "task2" / "window_index.csv")
-    windows = windows[windows.split == args.split].copy()
+    windows = read_window_index(args.release_root.resolve(), [args.split])
     panels = sorted(windows.panel.unique().tolist())
     if args.panel:
         panels = [p for p in panels if p in set(args.panel)]

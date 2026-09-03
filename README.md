@@ -1,437 +1,361 @@
-# TrafficFlowBench Public Participant Repository
-
-TrafficFlowBench is a four-task freeway-traffic benchmark for the 2026 IEEE
-Big Data Cup. The benchmark asks participants to reconstruct and explain a
-traffic system, not only minimize one pointwise prediction error.
-
-Participants use the public Kaggle data package to work on:
-
-1. monthly masked traffic-state reconstruction;
-2. online short-horizon queue prediction;
-3. physical flow-consistency assessment; and
-4. dynamic OD/path-flow estimation.
-
-All participants use the same four-task scoring rule and one unified
-leaderboard. There is no reasoning-text score, no expert-only score, and no
-hard physics gate in Release 1.0.
-
-This GitHub repository contains participant-facing code, schemas,
-configuration, documentation, and simple baselines. The public data package
-is distributed separately through the Kaggle Competition Data page.
-
-## Competition architecture
-
-~~~text
-Kaggle Data page
-  public observations, network, ramps, paths, masks, and templates
-          |
-          v
-Participant method
-  reconstruct states -> predict queues -> provide physical fields -> estimate OD/path flows
-          |
-          v
-One unified submission.csv
-  the task column identifies each task's rows
-          |
-          v
-Kaggle private evaluation
-  hidden labels and organizer-only evaluation assets
-          |
-          v
-One composite leaderboard score
-~~~
-
-Public validation is for self-diagnostics. It is not a substitute for the
-hidden Kaggle evaluation set and is not a leaderboard claim.
-
-### End-to-end workflow
-
-~~~mermaid
-flowchart LR
-    A["Kaggle public data<br/>train + validation"] --> B["Task 1<br/>masked state reconstruction"]
-    B --> C["Complete monthly state<br/>speed + flow + derived density"]
-    C --> D["Task 3<br/>FD and LWR consistency"]
-    C --> E["Task 4<br/>dynamic OD/path flow"]
-    F["60-minute history at T"] --> G["Task 2<br/>30-minute queue forecast"]
-    B --> H["Unified submission.csv"]
-    G --> H
-    D --> H
-    E --> H
-    H --> I["Kaggle private evaluation"]
-    I --> J["S_total leaderboard score"]
-~~~
-
-Tasks 1, 3, and 4 use the offline monthly state/data setting. Task 2 is an
-online short-term forecast and uses its own released forecast-window index.
-
-## Corridor coverage and time split
-
-The release contains five corridor families and ten directional panels:
-
-| Family | Directional panels |
-|---|---|
-| D7_I10 | D7_I10_E, D7_I10_W |
-| D7_I210 | D7_I210_E, D7_I210_W |
-| D7_I405 | D7_I405_N, D7_I405_S |
-| D12_I5 | D12_I5_N, D12_I5_S |
-| D12_I405 | D12_I405_N, D12_I405_S |
-
-| Split | Period | Use |
-|---|---|---|
-| Public train | 2025-06-01 through 2026-02-28 | Model development and training |
-| Public validation | 2026-03-01 through 2026-03-31 | Local self-diagnostics |
-| Kaggle private evaluation | Hidden organizer-defined scenario | Official ranking |
-
-PeMS did not publish station files for 2025-11-28 and 2025-11-29. Those dates
-are excluded from the task indices; they are not treated as imputed values.
-April through June 2026 are not part of the public train/validation release
-because of inadequate D12 I-405 observation quality.
-
-### Release coverage figures
-
-The following figures summarize the public observation-quality audit and the
-uniform train/validation split:
-
-![Monthly source quality by panel and month](docs/assets/monthly-source-quality.svg)
-
-![Public train and validation split](docs/assets/data-split.svg)
-
-## Data channels and quality rule
+# TrafficFlowBench
+
+A four-task freeway-traffic benchmark for the 2026 IEEE Big Data Cup.
+
+Ten directional freeway corridors, nine months of five-minute detector records,
+and four questions asked of the same road. The benchmark asks you to
+**reconstruct and explain a traffic system**, not to minimise one prediction
+error — the four tasks are scored together, and the ones that pay best are the
+ones a physically coherent method solves at the same time.
+
+- **Data**: the Kaggle competition Data page
+- **Code, schemas, baselines, scoring rules**: this repository
+- **Start here**: [`docs/RUN_LOCAL.md`](docs/RUN_LOCAL.md)
+
+---
+
+## Why these four tasks
+
+Every task is a problem a traffic-management centre actually has. They were
+chosen because they need each other.
+
+**Detectors fail, constantly.** On a real freeway a large share of every
+five-minute record is missing, degraded, or imputed by the agency before anyone
+sees it. Nothing downstream — no control strategy, no travel-time estimate, no
+incident detection — works until the gaps are filled. **Task 1 is that: fill in
+the missing cells.**
+
+**Knowing what is happening now is not the same as knowing what happens next.**
+A queue that has just started spreads upstream faster than intuition suggests,
+and the decision to meter a ramp or post a warning has to be made before the
+queue arrives. **Task 2 is that: from one hour of history, say which links are
+queued over the next thirty minutes.**
+
+**A reconstruction can fit every observation and still be impossible.** Fill in
+missing cells with a smooth statistical model and you get plausible-looking
+numbers that quietly violate conservation of vehicles — cars appear and vanish
+between detectors. That is the failure mode that makes an estimate useless for
+control, and RMSE cannot see it. **Task 3 is that: does your Task 1 answer obey
+traffic-flow physics?** It is scored on the file you already submitted, so it
+cannot be gamed independently — the only way to raise it is to reconstruct
+better.
+
+**Detectors count vehicles; they do not say where anyone is going.** Planning,
+pricing and rerouting need origin-destination demand, which is never measured
+directly and has to be inferred from link counts. The inverse problem is
+underdetermined, so it needs a prior and it needs the counts to be right.
+**Task 4 is that: recover path flows from counts.**
+
+Put together: **fill the gaps, respect the physics, predict what comes next, and
+explain where the traffic came from.** That is the loop a traffic centre runs,
+and no single one of those steps is worth much alone.
+
+## How the tasks connect
+
+```text
+                  masked observations
+                          │
+                          ▼
+        ┌────────  Task 1: reconstruct  ───────┐
+        │                 │                    │
+        │                 ▼                    ▼
+        │        Task 3: is it physical?   Task 4: where did it come from?
+        │        (scored on the very          (counts → path flows)
+        │         same file, no submission)
+        ▼
+  Task 2: what happens in the next 30 minutes
+   (60 min of history, independent windows)
+```
+
+Tasks 1 and 3 are **the same submission judged twice** — once for accuracy,
+once for physical coherence. Task 4 consumes counts and network structure. Task
+2 stands on its own: it is scored on separate short windows, not on the month.
+
+**A suggested order.** This is advice, not a rule — solve them however you like.
+
+1. **Task 1 first**, because Task 3 comes free with it and together they are
+   half the total score. Get a reconstruction working end to end before tuning.
+2. **Then Task 3**, by changing Task 1. Look at where conservation breaks:
+   usually a smoother that produces beautiful speeds and inconsistent flows.
+   A method built around the flow balance tends to lift both scores at once.
+3. **Then Task 4**, which is a self-contained inverse problem and where a
+   classical, well-regularised solver goes a long way.
+4. **Task 2 last**, because it shares the least with the others. It is worth
+   0.30 and the naive baseline scores 0.25, so it is where the largest
+   proportional gain sits.
+
+## Scoring
+
+```text
+S_total = 0.35*S_state + 0.30*S_queue + 0.15*S_physics + 0.20*S_ODME
+```
+
+Every component is on [0, 1], 1 is perfect. Corridors are averaged equally, and
+a missing task output scores 0 rather than being skipped. The full rule is in
+[`docs/SCORING_SPEC.md`](docs/SCORING_SPEC.md).
 
-The detector channels are:
+---
 
-- speed_kmh: measured speed, in km/h;
-- flow_vph: measured flow, in vehicles/hour; and
-- occupancy: measured occupancy fraction.
+## Task 1 — Reconstruct the missing state
 
-Density is a derived quantity, not a separate detector measurement. Where
-needed, it is derived from speed and flow as:
+**What is tested.** Whether you can recover speed and flow at cells the release
+has removed, using everything else: the rest of the corridor at that moment, the
+same link at other times, and the corridor's own history.
 
-$$
-k = \frac{q}{v}.
-$$
+**What you get.** `mainline_states_masked/`, where the target cells are blanked
+to null, plus ramp flows and the full network. The removal rate is one of three
+regimes — R1 removes 20% of eligible cells, R2 30%, R3 50% — and each calendar
+day is published under exactly one of them.
 
-Task 1 scores speed and flow only. Occupancy and density are not independently
-scored in Task 1.
+**What you submit.** One speed and one flow for every blanked eligible cell:
 
-A cell is eligible for accuracy scoring when:
+```text
+panel,timestamp,station_id,link_id,mask_regime,speed_kmh,flow_vph
+```
 
-~~~text
-is_score_eligible = pct_observed >= 75 and required values are non-null
-~~~
+The required rows are enumerated for you in
+`task1/<PANEL>/<split>/sample_submission_state.csv`. A missing row scores as a
+zero prediction and still counts in the denominator.
 
-The legacy is_imputed flag may still be true when pct_observed < 100; this
-does not automatically make a cell unusable. Ramp records and their quality
-flags are retained because they are needed for physical consistency and ODME.
+**How it is scored.** Per regime, then averaged over the three:
 
-## What participants submit
+```text
+S_speed = max(0, 1 - RMSE_speed / 25)                # km/h
+S_flow  = max(0, 1 - RMSE_flow_per_lane / 600)       # veh/h/lane
+S_state = 0.54*S_speed + 0.46*S_flow
+```
 
-Participants submit one unified CSV using the official Kaggle
-sample_submission.csv as the definitive key and column template. The file is
-a task-tagged long table. It is formed by vertically concatenating the four
-task outputs, not by joining them on timestamp:
+Flow RMSE is taken **per lane**. Against total link flow the same error scored
+very differently on a three-lane and a six-lane corridor, which made corridors
+incomparable on lane count alone.
 
-~~~text
-state   -> Task 1 rows
-queue   -> Task 2 rows
-physics -> Task 3 rows
-odme    -> Task 4 rows
-~~~
+**Baseline.** A weekday × time-of-day profile plus local interpolation:
 
-The task column identifies which task owns each row. Use the released panel,
-link, station, path, zone, timestamp, mask, and window identifiers exactly as
-provided. Do not add hidden labels or private test answers.
+```bash
+python src/task1/build_task1_baseline_submission.py \
+  --release-root $REL --split train --output state_submission.csv
+python src/task1/score_task1.py \
+  --submission state_submission.csv --release-root $REL --split train
+```
 
-## Task 1 — Monthly masked traffic-state reconstruction
+---
 
-Task 1 is an offline monthly reconstruction problem. For each required masked
-cell, participants predict speed_kmh and flow_vph under three deterministic
-mask regimes:
+## Task 2 — Predict the queue
 
-| Regime | Mask rate |
-|---|---:|
-| R1 | 20% |
-| R2 | 30% |
-| R3 | 50% |
+**What is tested.** Short-horizon propagation: not whether you can see the queue
+that is already there, but whether you can tell where it goes next, and where a
+new one is about to form.
 
-The Task 1 key is:
+**What you get.** Independent windows. Each gives you 60 minutes of observations
+up to a forecast origin `T`, and asks about `T+5 … T+30` — six five-minute steps
+over every link. Windows come in two conditions, five of each per corridor and
+split:
 
-~~~text
-(panel, timestamp, station_id, link_id, mask_regime)
-~~~
+- `queue_onset` — nothing queued in the history, a queue in the horizon;
+- `queue_ongoing` — a queue is already visible at `T`.
 
-Density does not need to be submitted for Task 1 scoring. If a later task needs
-density, derive it consistently from the submitted speed and flow.
+Both guarantee a queue somewhere in the horizon, so no window can be won by
+predicting "no queue everywhere" and collecting a free mark.
 
-For each regime r:
+**What you submit.** A binary indicator per link and future timestamp:
 
-$$
-S_v^{(r)} = \max\left(0,1-\frac{\mathrm{RMSE}_v^{(r)}}{25}\right),
-$$
+```text
+window_id,timestamp,link_id,queue_pred
+```
 
-$$
-S_q^{(r)} = \max\left(0,1-\frac{\mathrm{RMSE}_q^{(r)}}{600}\right),
-$$
+**How it is scored.** Space-time intersection-over-union per window, averaged
+with equal weight across windows and conditions:
 
-$$
-S_{\mathrm{state}}^{(r)}
-=0.54S_v^{(r)}+0.46S_q^{(r)}.
-$$
+```text
+IoU = |predicted AND true| / |predicted OR true|
+```
 
-The final Task 1 score is the equal average of the three regimes:
+A link is queued when its speed is at or below `0.60 × free_speed`. The label is
+taken from the underlying state rather than the noisy observation, so
+measurement error cannot flip it back and forth at the threshold.
 
-$$
-S_{\mathrm{state}}
-=\frac{S_{\mathrm{state}}^{(R1)}+S_{\mathrm{state}}^{(R2)}+S_{\mathrm{state}}^{(R3)}}{3}.
-$$
+`D12_I405_N` and `D12_I405_S` are excluded from Task 2 only; they remain in the
+other three tasks.
 
-Only score-eligible measured cells contribute to the accuracy score.
+**Baseline.** Persistence — repeat the queue state at `T` through all six steps:
 
-## Task 2 — Online queue prediction
+```bash
+python src/task2/build_task2_persistence_submission.py \
+  --release-root $REL --split validation --output queue_submission.csv
+```
 
-Task 2 is an online short-term prediction problem, not a month-long forecast.
-For each released forecast window, participants receive the 60 minutes through
-the forecast origin T and predict binary queue status from T+5 through T+30
-minutes.
+It scores 0.2518. Queue labels are withheld for every split, so this is one task
+you cannot self-score; `src/task2/score_task2.py` is published so you can read
+exactly how the leaderboard will judge you.
 
-The submission key is:
+---
 
-~~~text
-(window_id, timestamp, link_id)
-~~~
+## Task 3 — Is your reconstruction physical?
 
-queue_pred must be exactly binary 0 or 1. The participant-visible condition
-is determined from the recent history available at T; future queue labels are
-not supplied to participants. Windows are separated by at least 360 minutes
-within each panel/condition group.
+**What is tested.** Whether the numbers you submitted for Task 1 could describe
+real traffic. Two things a real freeway always satisfies:
 
-For one forecast window, let Qhat be the predicted set of queued link-time
-cells and Q* the hidden reference set:
+- **The fundamental diagram.** Speed, flow and density on a link are not
+  independent. Given density, flow is bounded, and beyond a critical density
+  flow falls rather than rises.
+- **Conservation.** Vehicles do not appear or vanish. Over five minutes, the
+  change in the number of vehicles on a link equals what came in, from upstream
+  and from the on-ramp, minus what left.
 
-$$\mathrm{IoU}_{ST}=\frac{|Q_{\mathrm{pred}}\cap Q_{\mathrm{true}}|}{|Q_{\mathrm{pred}}\cup Q_{\mathrm{true}}|}$$
+```text
+N(t+dt) - N(t) = dt * (q_in + r_on - q_out - r_off)
+```
 
-In plain notation:
+**What you submit.** *Nothing.* Task 3 is scored on your Task 1 file. The
+evaluator derives the rest itself — density as `q/v`, accumulation as `k·L`,
+boundary flows from the released topology, ramp flows from the released ramp
+observations.
 
-~~~text
-IoU_ST = |Q_pred intersection Q_true| / |Q_pred union Q_true|
-~~~
+This is deliberate. When Task 3 accepted its own submission, a participant could
+declare `k = q/v_f` and score 0.9999 on the diagram term instead of an honest
+0.8833, or project boundary flows straight onto the conservation equation and
+score a perfect 1.0 whatever state they had submitted. Anchoring the score to
+the Task 1 answer closes both routes by construction.
 
-If both sets are empty, the score is 1. Missing required prediction rows
-receive a score of 0 for the affected cells. Normal and disruption windows
-receive equal weight within each panel. Panel scores are averaged within
-families, and family scores are averaged equally.
+**How it is scored.**
 
-Due to insufficient public ramp-observation quality, D12_I405_N and
-D12_I405_S are excluded from Task 2 scoring only. They remain part of Tasks
-1, 3, and 4.
+```text
+S_physics = (1/3)*S_FD + (2/3)*S_LWR
+```
 
-### Task 2 workflow
+`S_LWR` carries the discrimination: it falls monotonically as error is injected
+and goes to zero for a submission that erases congestion, while `S_FD` moves by
+less than 0.03 across the same range. Which transitions are scored depends on
+your corridor's ramp-observation coverage — the table is frozen and published in
+[`docs/TASK3_LWR_COVERAGE_MODES.md`](docs/TASK3_LWR_COVERAGE_MODES.md).
 
-~~~mermaid
-flowchart LR
-    A["60 minutes observed<br/>through origin T"] --> B["Participant model"]
-    B --> C["queue_pred = 0 or 1<br/>for T+5 ... T+30"]
-    C --> D["Space-time IoU<br/>per forecast window"]
-    D --> E["Equal normal/disruption<br/>panel average"]
-~~~
+```bash
+python src/task3/score_task3.py \
+  --state-submission state_submission.csv --release-root $REL --split train
+```
 
-## Task 3 — Physical consistency
+Note that the naive baseline scores about 0.35 here against roughly 0.96 for an
+exact answer. That gap is the largest in the benchmark, and it is the clearest
+signal that fitting cells one at a time is not enough.
 
-Task 3 evaluates the complete reconstructed physical field rather than only
-the masked Task 1 cells. The required fields include speed, flow, derived
-density, inflow, outflow, accumulation, on-ramp flow, off-ramp flow, and the
-corresponding ramp-validity indicators.
+---
 
-The physical units are explicit:
+## Task 4 — Recover the demand
 
-- Fundamental-diagram checks use per-lane quantities:
-  q_lane = q_total / lanes, k_lane = k_total / lanes.
-- Vehicle conservation uses total-flow quantities over the network links.
+**What is tested.** The classical inverse problem of traffic estimation: link
+counts are observed, path flows are not, and there are far more paths than
+independent measurements. A useful answer has to reproduce the counts *and* stay
+close to what is plausible.
 
-The conservation relation is:
+**What you get.** The path set, the path-link incidence matrix `A`, the released
+link counts `c` for one demand period, and a weak path-flow prior `b`.
 
-$$
-N_\ell(t+\Delta t)
-=N_\ell(t)+\Delta t\,[q_{\mathrm{in}}(t)+r_{\mathrm{on}}(t)-q_{\mathrm{out}}(t)-r_{\mathrm{off}}(t)].
-$$
+**What you submit.**
 
-The locked Release 1.0 score is:
+```text
+panel,departure_time,path_id,origin_zone,destination_zone,path_flow
+```
 
-$$
-S_{\mathrm{physics}}
-=\frac{1}{3}S_{\mathrm{FD}}+\frac{2}{3}S_{\mathrm{LWR}}.
-$$
+Flows must be finite and non-negative, and `departure_time` is a period token
+rather than a timestamp — copy it from the template.
 
-The three coverage modes are fixed by the released public ramp audit:
+**How it is scored.** Four components: how close your path flows are to the
+reference, whether they reproduce the counts when loaded onto the network, how
+far you moved from the prior compared with how far the reference moved, and
+whether your destination-attraction distribution is right.
 
-- **Mode A — high ramp coverage:** valid ramp observations anchor the LWR
-  transition whenever an attached ramp is present.
-- **Mode B — partial ramp coverage:** valid ramp transitions are used; an
-  attached-ramp transition with an invalid ramp cell is omitted rather than
-  filled with zero. No-ramp mainline segments still use mainline LWR.
-- **Mode C — low ramp coverage:** only mainline segments without usable ramp
-  evidence are used for the LWR score. This prevents poor ramp data from
-  becoming a penalty for either organizers or participants.
+```text
+S_ODME = 0.45*S_od + 0.25*S_link + 0.15*S_dev + 0.15*S_attr
+```
 
-The mode is a fixed organizer-released evaluation choice, not a participant
-hyperparameter. S_qkv is diagnostic only because density is derived from
-submitted flow and speed.
+The `S_dev` term is what stops the two obvious degenerate answers: submitting
+the prior unchanged, and fitting the counts exactly with a wild demand pattern.
 
-### Task 3 workflow
+**Baseline.** Non-negative least squares with prior regularisation:
 
-~~~mermaid
-flowchart LR
-    A["Task 1 reconstructed<br/>monthly state"] --> B["Derive density<br/>k = q / v"]
-    C["Network topology<br/>lanes + capacities"] --> D["FD check"]
-    E["Mainline and ramp<br/>flow fields"] --> F["LWR conservation check"]
-    B --> D
-    A --> F
-    D --> G["S_physics"]
-    F --> G
-~~~
+```bash
+python src/task4/build_task4_odme_artifacts.py \
+  --release-root $REL --split validation --output-root task4_odme
+```
 
-## Task 4 — Dynamic ODME and path-flow recovery
+---
 
-Task 4 estimates nonnegative path flows on the released directional network.
-The release provides network links, legal paths, origin/destination zones,
-path-link incidence, weak prior, and public count context.
+## The data
 
-The path-flow key is:
+Ten directional corridors — `D7_I10`, `D7_I210`, `D7_I405`, `D12_I5`,
+`D12_I405`, each in both directions — at five-minute resolution, with mainline
+detectors, ramp flows, link geometry, fundamental-diagram parameters, paths and
+an OD prior.
 
-~~~text
-(panel, departure_time, path_id, origin_zone, destination_zone)
-~~~
+| Split | Masked inputs | Answers released | What it is for |
+|---|:--:|:--:|---|
+| `train` | yes | **yes** | fitting, and scoring yourself |
+| `validation` | yes | no | practice submissions |
+| `private` | yes | no | the ranked evaluation |
 
-departure_time is a released period token, not an arbitrary timestamp.
-Submitted path flows must be finite, nonnegative, connected, and consistent
-with the released path and zone identifiers.
+Every cell carries `pct_observed`, and only cells with `pct_observed >= 75` and
+non-null values are scored. About 76% qualify. **The rest are still released —
+degraded data is part of the problem, not a defect in the package.** An
+unavailable ramp reading is unavailable evidence, never a measured zero: treat
+it as zero and Task 3 will cost you.
 
-Let f* be the organizer reference path flow, fhat the submitted path flow,
-A the released path-link incidence matrix, and c the reference link counts:
+**The released records are synthetic.** They were generated by a calibrated
+traffic-flow model whose parameters — free-flow speed, per-lane capacity, jam
+density, demand by weekday and time of day, measurement-noise scale, detector
+availability — were measured from real freeway detector data on the
+corresponding corridors. No real record, shifted or resampled or copied, appears
+in the release, and the released calendar deliberately matches no real period.
 
-$$S_{od}=\max\left(0,1-\frac{\sum_j|f_j^{pred}-f_j^{ref}|}{\max(\sum_j f_j^{ref},\varepsilon)}\right)$$
+What that means for you: the data obeys real traffic physics and carries
+realistic measurement error, but there is nothing to look it up in. There is no
+external source to join against, and a method that works here is a method that
+works on the road.
 
-$$S_{link}=\max\left(0,1-\frac{\sum_\ell|(Af^{pred})_\ell-c_\ell|}{\max(\sum_\ell c_\ell,\varepsilon)}\right)$$
+More in [`docs/DATA.md`](docs/DATA.md).
 
-With weak prior b:
-
-$$D_{pred}=\sum_j|f_j^{pred}-b_j|,\qquad D_{ref}=\sum_j|f_j^{ref}-b_j|$$
-
-$$S_{dev}=\exp\left(-\left|\frac{D_{pred}}{D_{ref}}-1\right|\right)$$
-
-The attraction score is:
-
-$$S_{attr}=\max\left(0,1-0.5\|a^{pred}-a^{ref}\|_1\right)$$
-
-The final ODME score is:
-
-$$S_{ODME}=0.45S_{od}+0.25S_{link}+0.15S_{dev}+0.15S_{attr}$$
-
-Invalid IDs, illegal paths, mismatched zones, duplicate keys, missing paths,
-negative flows, or non-finite values invalidate the affected panel.
-
-### Task 4 workflow
-
-~~~mermaid
-flowchart LR
-    A["Released paths + zones"] --> C["Path-flow estimate"]
-    B["Incidence matrix A<br/>and count context"] --> C
-    C --> D["Load paths onto links"]
-    D --> E["S_od + S_link + S_dev + S_attr"]
-    E --> F["S_ODME"]
-~~~
-
-## Overall leaderboard score
-
-The four task scores are combined into one score, where higher is better:
-
-$$
-S_{\mathrm{total}}
-=0.35S_{\mathrm{state}}+0.30S_{\mathrm{queue}}
-+0.15S_{\mathrm{physics}}+0.20S_{ODME}.
-$$
-
-Directional panels are averaged equally within each of the five corridor
-families, and the five family scores are averaged equally. If one task is
-missing or invalid, that task receives its configured default score of zero;
-other valid task outputs are still evaluated.
-
-## Repository layout
-
-~~~text
-config/       Public corridor, quality-date, and Task 3 mode configuration
-docs/         Competition, scoring, schema, quality, baseline, and run docs
-src/task1/    Task 1 baselines and scorer
-src/task2/    Task 2 queue baseline and scorer
-src/task3/    Task 3 physics baseline and scorer
-src/task4/    Task 4 ODME baseline and scorer
-src/          Unified submission and overall-score helpers
-~~~
-
-No raw PeMS archive, private test label, organizer solution, hidden queue
-target, private evaluator, private count, or CTM scenario is included in this
-repository.
+---
 
 ## Quick start
 
-Install dependencies:
+```bash
+git clone https://github.com/jacky850/trafficflowbench-public.git
+cd trafficflowbench-public
+pip install -r requirements.txt
 
-~~~powershell
-python -m pip install -r requirements.txt
-~~~
+REL=/path/to/the/downloaded/data
 
-Download the public data package from Kaggle and set its local path:
+python src/task1/build_task1_baseline_submission.py \
+  --release-root $REL --split train --panel D12_I5_N --output state_submission.csv
+python src/task1/score_task1.py \
+  --submission state_submission.csv --release-root $REL --split train --panel D12_I5_N
+python src/task3/score_task3.py \
+  --state-submission state_submission.csv --release-root $REL --split train --panel D12_I5_N
+```
 
-~~~powershell
-$release = "C:\path\to\kaggle_release"
-~~~
+One corridor runs in minutes; drop `--panel` for all ten. The full walkthrough,
+including how to build the file you upload, is in
+[`docs/RUN_LOCAL.md`](docs/RUN_LOCAL.md).
 
-Detailed commands are available in:
+## What is here
 
-- [docs/RUN_LOCAL.md](docs/RUN_LOCAL.md)
-- [docs/SUBMISSION_SCHEMAS.md](docs/SUBMISSION_SCHEMAS.md)
-- [docs/SCORING_SPEC.md](docs/SCORING_SPEC.md)
-- [docs/BASELINES.md](docs/BASELINES.md)
-- [docs/DATA_QUALITY.md](docs/DATA_QUALITY.md)
-- [docs/TASK3_LWR_COVERAGE_MODES.md](docs/TASK3_LWR_COVERAGE_MODES.md)
-- [docs/KAGGLE_OFFICIAL_RULES.md](docs/KAGGLE_OFFICIAL_RULES.md)
+```text
+src/task1/   state baselines, submission builder, evaluator
+src/task2/   persistence baseline, queue utilities, evaluator
+src/task3/   the anchored physics evaluator
+src/task4/   ODME baseline and evaluator
+src/merge_submissions.py   three task files -> one upload
+config/      the corridor list, the release contract, the Task 3 mode table
+docs/        the scoring rule, schemas, masks, data layout, baselines
+```
 
-To merge four task-specific files into the unified participant submission:
+| Document | What it answers |
+|---|---|
+| [`RUN_LOCAL.md`](docs/RUN_LOCAL.md) | How do I run any of this? |
+| [`DATA.md`](docs/DATA.md) | What is in the package, and which split has answers? |
+| [`SCORING_SPEC.md`](docs/SCORING_SPEC.md) | Exactly how is each number computed? |
+| [`SUBMISSION_SCHEMAS.md`](docs/SUBMISSION_SCHEMAS.md) | What columns, what keys, what coverage? |
+| [`MASK_SPEC.md`](docs/MASK_SPEC.md) | Which cells am I being asked about? |
+| [`BASELINES.md`](docs/BASELINES.md) | What do the baselines do, and what do they score? |
+| [`TASK3_LWR_COVERAGE_MODES.md`](docs/TASK3_LWR_COVERAGE_MODES.md) | Which transitions is my corridor judged on? |
 
-~~~powershell
-python -B src\merge_submissions.py --state state_submission.csv --queue queue_submission.csv --physics physics_submission.csv --odme path_flow_submission.csv --output submission.csv
-~~~
-
-The organizer-only hidden solution and private evaluator are not required for
-local participant development. Public-validation scoring checks schema, row
-coverage, and implementation behavior before submission.
-
-## Public-validation QA reference
-
-The following values are reference self-diagnostics for the Release 1.0 public
-validation package and supplied baselines. They are not guarantees for the
-hidden Kaggle leaderboard:
-
-| Component | Score | Weight | Contribution |
-|---|---:|---:|---:|
-| Task 1 — state | 0.591069 | 0.35 | 0.206874 |
-| Task 2 — queue | 0.543117 | 0.30 | 0.162935 |
-| Task 3 — physics | 0.243610 | 0.15 | 0.036542 |
-| Task 4 — ODME | 0.839270 | 0.20 | 0.167854 |
-| **Overall** | **0.574205** | **1.00** | **0.574205** |
-
-These numbers are included only to help verify a local installation. A
-different valid method is expected to obtain different scores.
-
-## Data provenance and attribution
-
-Traffic observations are derived from California PeMS data and are provided
-subject to the terms stated on the Kaggle Competition Data page. Network
-materials derived from OpenStreetMap must retain the attribution:
-
-~~~text
-© OpenStreetMap contributors
-~~~
-
-Participants must comply with the competition rules, applicable source-data
-terms, and the licenses stated on the Kaggle Data page.
+Official rules, deadlines and prizes are on the Kaggle competition page.

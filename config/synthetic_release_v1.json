@@ -1,0 +1,50 @@
+{
+  "schema_version": "trafficflowbench_synthetic_release_v1",
+  "traffic_policy": {
+    "allowed_local_source_use": "aggregate calibration only",
+    "prohibited": [
+      "row replay",
+      "timestamp shifting",
+      "sampling or copying historical speed, flow, occupancy, or quality flags"
+    ],
+    "historical_source_rows_in_release": false
+  },
+  "synthetic_calendar": {
+    "train": {
+      "start": "2030-06-01T00:00:00Z",
+      "end_exclusive": "2031-03-01T00:00:00Z"
+    },
+    "validation": {
+      "start": "2031-03-01T00:00:00Z",
+      "end_exclusive": "2031-04-01T00:00:00Z"
+    },
+    "private": {
+      "start": "2031-04-01T00:00:00Z",
+      "end_exclusive": "2031-05-01T00:00:00Z"
+    }
+  },
+  "scenario_contract": {
+    "capacity_multiplier": 1.2,
+    "incident_severity": 1.0,
+    "master_seed_derivation": "stable integer from synthetic_release_v1, panel, split",
+    "child_seed_offsets": {
+      "mainline_observation": 10,
+      "ramp_observation": 11,
+      "task4_prior": 12
+    }
+  },
+  "task2": {
+    "conditions": [
+      "queue_onset",
+      "queue_ongoing"
+    ],
+    "queue_onset_windows_per_panel_split": 5,
+    "queue_ongoing_windows_per_panel_split": 5,
+    "requires_queue_in_horizon": true,
+    "condition_rationale": "queue_onset holds windows whose visible history has no queue and whose horizon does; queue_ongoing holds windows where a queue is already visible. Both require a queue in the horizon, which replaces the old minimum_transition_rate: without it a window with nothing queued and nothing predicted took the empty-union IoU of 1.0 as a free mark, which was 47.5% of the old normal condition, while another 27.5% scored exactly 0.0. Onset is solvable: an hour before a queue forms the road is already at 1.28x its queue threshold against 1.54x where none follows, and carries 6912 vph against 4620.",
+    "minimum_spacing_minutes": 360,
+    "minimum_history_coverage": 0.7,
+    "maximum_persistence_iou": 0.9,
+    "window_count_rationale": "Sample size only, not an anti-gaming threshold; the selector safeguards below carry that. Per-window IoU has a standard deviation of 0.3752 on the real validation persistence baseline (160 windows, 8 panels), so S_queue's per-panel standard error is 0.1187 at 5 windows against 0.0839 at 10. Across 8 panels at the 0.30 task weight that is 0.0126 of S_total against 0.0089, an increase of 0.0037. Reduced from 10 on 2026-09-01 because the synthetic corridor yields normal windows almost only at the morning peak onset and cannot reach 10."
+  }
+}

@@ -1,131 +1,150 @@
-# TrafficFlowBench Scoring Specification
+# Scoring specification
 
-This is the technical scoring contract for Release 1.0. Public-validation
-reports are self-diagnostics only; official ranking uses hidden Kaggle private-evaluation truth.
+The normative scoring contract for Release 1.0. The README explains what each
+score means; this page is the exact rule.
 
-## Averaging
+## Aggregation
 
-Each directional panel is scored first. Directions are averaged equally within
-each of the five families, and family scores are averaged equally. Missing task
-outputs receive the configured default score of zero.
+Each directional corridor is scored on its own. Directions are averaged equally
+within a family, families are averaged equally, and the four task scores are
+combined with fixed weights:
 
-## Quality eligibility
+```text
+S_total = 0.35*S_state + 0.30*S_queue + 0.15*S_physics + 0.20*S_ODME
+```
+
+A missing task output scores 0, not a skipped average. A corridor with no
+scoreable cell scores 0, not 1.
+
+## Eligibility
 
 ```text
 is_imputed        = pct_observed < 100
-is_score_eligible = pct_observed >= 75 and required values are non-null
+is_score_eligible = pct_observed >= 75 and the required values are non-null
 ```
 
-Task 1 scores speed and flow only. Density is derived. Ramp flow is retained for
-Task 3 and Task 4. Invalid ramp cells are unavailable evidence, never measured
-zero flow.
+Only `is_score_eligible` cells are scored. `speed_kmh` and `flow_vph` are the
+only scored channels; occupancy is not scored and density is derived by the
+evaluator.
 
-## Task 1
+## Task 1 — state reconstruction
 
-For `r` in `{R1,R2,R3}`:
+For each masking regime `r` in `{R1, R2, R3}`:
 
 ```text
-S_speed(r) = max(0, 1 - RMSE_speed(r)/25)
-S_flow(r)  = max(0, 1 - RMSE_flow(r)/600)
+S_speed(r) = max(0, 1 - RMSE_speed(r) / 25)
+S_flow(r)  = max(0, 1 - RMSE_flow_per_lane(r) / 600)
 S_state(r) = 0.54*S_speed(r) + 0.46*S_flow(r)
-S_state    = mean_r S_state(r)
+S_state    = mean over r
 ```
 
-The mask rates are R1=0.20, R2=0.30, and R3=0.50. The submission key is
-`(panel,timestamp,station_id,link_id,mask_regime)`.
+`RMSE_flow_per_lane` divides both the submitted and the true flow by the
+station's lane count, from `fd_parameters.csv`, before the residual. Against
+total link flow the 600 scale was roughly five times stricter than the 25 km/h
+speed scale and made corridors incomparable on lane count alone — one
+fixed-quality model scored `S_flow` from 0.0086 to 0.3255 across the ten
+corridors. Per lane that spread in `S_state` falls from 0.158 to 0.020.
 
-## Task 2
+Mask rates are `R1 = 0.20`, `R2 = 0.30`, `R3 = 0.50`. The submission key is
+`(panel, timestamp, station_id, link_id, mask_regime)`. The mask itself is
+defined in [`MASK_SPEC.md`](MASK_SPEC.md).
 
-Participants observe 60 minutes through forecast origin `T` and predict binary
-queue status at `T+5,...,T+30`. For each window:
+## Task 2 — queue forecasting
+
+You see 60 minutes of history through the forecast origin `T` and predict a
+binary queue indicator for `T+5 … T+30`. Per window:
 
 ```text
-IoU_ST = |Qhat intersection Qtruth| / |Qhat union Qtruth|
+IoU = |Qpred AND Qtrue| / |Qpred OR Qtrue|
 ```
 
-Empty-empty scores 1. Normal and disruption windows receive equal weight.
-D12_I405_N/S are excluded from Queue only because of public validation quality.
+A window that genuinely has no queue and for which none was predicted scores 1.
+The two conditions, `queue_onset` and `queue_ongoing`, carry equal weight; each
+contributes 5 windows per corridor and split.
 
-The released public window index separates origins within each
-`(panel, split, condition)` group by at least 360 minutes. The participant-visible
-`condition` is determined only from the 60-minute history available at the forecast
-origin; an organizer-only future-queue eligibility filter is used only when sampling
-windows and is not exposed as target information.
+`queue_onset` windows have no queue visible in the history and a queue in the
+horizon. `queue_ongoing` windows already show a queue at the origin. Both
+require a queue somewhere in the horizon, so an empty-empty window cannot be
+drawn as a free mark. Origins within a `(panel, split, condition)` group are at
+least 360 minutes apart. The condition label is derived only from the history
+you can see.
 
-## Task 3
+The ground truth is taken from the underlying state rather than the noisy
+observation, so measurement error cannot flip the indicator back and forth at
+the threshold. The threshold is `speed <= v_cut`, `v_cut = 0.60 * free_speed`.
 
-FD is evaluated in per-lane units:
+`D12_I405_N` and `D12_I405_S` are excluded from Task 2 only. They remain in the
+other three tasks.
+
+## Task 3 — physical consistency
+
+**Task 3 has no submission of its own.** It is scored on the speeds and flows
+you submitted for Task 1. The evaluator derives the physics frame itself:
 
 ```text
-q_lane = q_total/lanes
-k_lane = k_total/lanes
-capacity_lane = capacity_total/lanes
+k = q/v                 density is an identity, not an estimate
+N = k*L                 accumulation follows from density and link length
+inflow, outflow         organizer-derived from the released topology
+r_on, r_off             the released ramp observations
 ```
 
-LWR conservation is evaluated in total-flow units:
+This removes every free parameter that could be tuned against the physics score
+independently of the state. Before anchoring, a submission could set
+`k = q/v_f` and score `S_FD` 0.9999 instead of an honest 0.8833, or project the
+boundary flows onto the conservation equation and score `S_LWR` 1.0 whatever
+state it had submitted. The only way to move `S_physics` is now to submit a
+better Task 1 answer.
+
+The fundamental-diagram term is evaluated per lane:
 
 ```text
-N(t+dt)-N(t) = dt*(q_in+r_on-q_out-r_off)
+q_lane = q_total/lanes,  k_lane = k_total/lanes,  capacity_lane = capacity/lanes
 ```
 
-The official revised physics score is:
+Conservation is evaluated in total-flow units over five-minute transitions:
+
+```text
+N(t+dt) - N(t) = dt*(q_in + r_on - q_out - r_off)
+S_LWR = max(0, 1 - sum|residual| / sum|rhs|)
+```
 
 ```text
 S_physics = (1/3)*S_FD + (2/3)*S_LWR
 ```
 
-Ramp validity requires `is_score_eligible`, `pct_observed >= 75`, and finite
-flow. Mode A uses ramp-anchored LWR on valid transitions. Mode B uses valid
-ramp transitions, omits attached-ramp transitions with invalid cells, and uses
-mainline-only LWR on no-ramp segments. Mode C scores only mainline segments
-with no ramp attachment. Modes are fixed by the public audit table in
-`TASK3_LWR_COVERAGE_MODES.md`.
+`S_LWR` carries the discrimination. `S_FD` moves by less than 0.03 across the
+whole range of submission quality, while `S_LWR` falls monotonically with
+injected error and sends a congestion-erasing submission to zero. Which
+transitions are scored depends on the corridor's coverage mode, published in
+[`TASK3_LWR_COVERAGE_MODES.md`](TASK3_LWR_COVERAGE_MODES.md).
 
-`S_qkv` is diagnostic only because derived density makes `q=k*v` an identity.
+`S_qkv` appears in the evaluator output as a diagnostic only; derived density
+makes `q = k*v` an identity.
 
-## Task 4
+## Task 4 — OD and path-flow estimation
 
-Let `f*` be the organizer reference path flow, `fhat` the submission, `A` the
-released path-link incidence, and `c` the measured/private link counts:
-
-```text
-S_od = max(0, 1 - sum(abs(fhat-f*)) / max(sum(f*), eps))
-S_link = max(0, 1 - sum(abs(A*fhat-c)) / max(sum(c), eps))
-```
-
-Let `b` be the released weak path-flow prior:
+Let `f*` be the reference path flow, `fhat` the submission, `A` the released
+path-link incidence, `c` the link counts, and `b` the released weak prior:
 
 ```text
-Dhat = sum(abs(fhat-b))
-Dstar = sum(abs(f*-b))
-S_dev = exp(-abs(Dhat/Dstar - 1))
+S_od   = max(0, 1 - sum|fhat - f*| / max(sum f*, eps))
+S_link = max(0, 1 - sum|A*fhat - c| / max(sum c, eps))
+S_dev  = exp(-|Dhat/Dstar - 1|),  Dhat = sum|fhat-b|,  Dstar = sum|f*-b|
+S_attr = max(0, 1 - 0.5*L1(a_hat, a_star))
 ```
 
-`S_attr` is the normalized destination-attraction distribution L1 score:
-
-```text
-S_attr = max(0, 1 - 0.5*L1(a_hat,a_star))
-```
-
-The final ODME score is:
+`a` is the normalised destination-attraction distribution.
 
 ```text
 S_ODME = 0.45*S_od + 0.25*S_link + 0.15*S_dev + 0.15*S_attr
 ```
 
-Invalid IDs, mismatched zones, duplicate paths, missing paths, negative flows,
-or non-finite values make the affected panel invalid.
+Invalid IDs, mismatched zones, duplicate or missing paths, negative flows, or
+non-finite values invalidate the affected corridor.
 
-## Overall score
+## What is never released
 
-```text
-S_total = 0.35*S_state + 0.30*S_queue
-        + 0.15*S_physics + 0.20*S_ODME
-```
-
-## Leakage boundary
-
-The public package may contain public train/validation observations and
-participant baseline code. It must not contain hidden truth, private test
-scenarios, private complete counts, `queue_true` labels intended for private
-evaluation, or private evaluator code.
+Hidden truth, private-split labels, private complete counts, `queue_true`
+labels for evaluation, organizer boundary flows, and private evaluator
+configuration. The public package carries observations, network assets,
+templates, and the baselines in `src/`.

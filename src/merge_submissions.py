@@ -1,9 +1,12 @@
-"""Merge four task-specific submissions into one Kaggle long-table file.
+"""Merge the task-specific submissions into one long-table file.
 
 This adapter is deliberately independent of hidden truth.  It validates the
 participant files, adds a globally unique submission_id, and concatenates the
-task rows vertically.  It can be used with public-validation templates now and
-with the private-test key universe later.
+task rows vertically.
+
+Task 3 is scored on the Task 1 state file and has no submission of its own, so
+--physics is optional and left over for internal pipelines that still produce a
+self-contained physics frame.
 """
 from __future__ import annotations
 
@@ -91,16 +94,18 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--state", type=Path, required=True)
     ap.add_argument("--queue", type=Path, required=True)
-    ap.add_argument("--physics", type=Path, required=True)
+    ap.add_argument("--physics", type=Path,
+                    help="optional; Task 3 is scored on --state and needs no file of its own")
     ap.add_argument("--odme", type=Path, required=True)
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
     frames = [
         to_unified(read_task(args.state.resolve(), "state"), "state"),
         to_unified(read_task(args.queue.resolve(), "queue"), "queue"),
-        to_unified(read_task(args.physics.resolve(), "physics"), "physics"),
         to_unified(read_task(args.odme.resolve(), "odme"), "odme"),
     ]
+    if args.physics is not None:
+        frames.insert(2, to_unified(read_task(args.physics.resolve(), "physics"), "physics"))
     result = pd.concat(frames, ignore_index=True)
     if result.submission_id.duplicated().any():
         raise ValueError("merged submission contains duplicate submission_id values")

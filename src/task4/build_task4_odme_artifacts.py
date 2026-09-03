@@ -9,11 +9,38 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import nnls
 
+# Make the sibling task packages importable when this file is run as a script,
+# so no PYTHONPATH is needed.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from task1.baseline_task1_historical_mean import DEFAULT_RELEASE, HERE, files
 
 
 PM_START, PM_END = 15, 19
 REG_LAMBDA = 0.05
+
+
+def released_counts(release: Path, panel: str, split: str) -> pd.DataFrame | None:
+    """The link counts the release publishes for this split, if it publishes any.
+
+    These are the counts Task 4 is actually posed on. Deriving counts from the
+    observation layer instead only works where that layer is complete, which is
+    true of train and not of the scored splits.
+    """
+    path = release / "task4" / panel / split / "synthetic_link_counts.csv"
+    if not path.exists():
+        return None
+    frame = pd.read_csv(path, dtype={"link_id": str})
+    return frame[["link_id", "count"]]
+
+
+def released_prior(release: Path, panel: str, split: str) -> pd.DataFrame | None:
+    """The weak path-flow prior the release publishes for this split."""
+    path = release / "task4" / panel / split / "synthetic_weak_prior.csv"
+    if not path.exists():
+        return None
+    return pd.read_csv(path, dtype={"path_id": str})
 
 
 def counts_for_split(panel_dir: Path, split: str) -> pd.DataFrame:
@@ -80,16 +107,20 @@ def solve(A: np.ndarray, counts: np.ndarray, base: np.ndarray) -> np.ndarray:
     return f
 
 
-def build_panel(panel: str, release: Path, output_root: Path) -> tuple[int, int]:
+def build_panel(panel: str, release: Path, output_root: Path, split: str = "validation") -> tuple[int, int]:
     panel_dir = release / "corridors" / panel
     network = panel_dir / "network"
     path_ids, link_ids, A, paths, base = load_operator(network)
     base_values = base.base_flow.to_numpy(dtype=float)
-    train_count_frame = counts_for_split(panel_dir, "train")
-    val_count_frame = counts_for_split(panel_dir, "validation")
+    train_count_frame = released_counts(release, panel, "train")
+    if train_count_frame is None:
+        train_count_frame = counts_for_split(panel_dir, "train")
+    val_count_frame = released_counts(release, panel, split)
+    if val_count_frame is None:
+        val_count_frame = counts_for_split(panel_dir, split)
     train_counts = train_count_frame.set_index("link_id").reindex(link_ids).fillna(0.0)["count"].to_numpy(dtype=float)
     val_counts = val_count_frame.set_index("link_id").reindex(link_ids).fillna(0.0)["count"].to_numpy(dtype=float)
-    # Public PeMS has counts only at detector links, while the released
+    # The release has counts only at detector links, while the released
     # incidence operator also contains unobserved connectors. Do not treat an
     # unobserved connector as a measured zero in the local ODME solve.
     # The public score domain is the validation measurement universe. A link
@@ -101,10 +132,17 @@ def build_panel(panel: str, release: Path, output_root: Path) -> tuple[int, int]
     val_f = solve(A[measured], val_counts[measured], base_values)
     out = output_root
     out.mkdir(parents=True, exist_ok=True)
+    prior = released_prior(release, panel, split)
+    departure_time = (
+        str(prior.departure_time.iloc[0])
+        if prior is not None and len(prior)
+        else str(base.departure_time.fillna("PUBLIC-TRAIN-PM").iloc[0])
+    )
+
     def frame(f: np.ndarray) -> pd.DataFrame:
         x = paths[["path_id", "origin_zone", "destination_zone"]].copy()
         x["panel"] = panel
-        x["departure_time"] = base.departure_time.fillna("PUBLIC-TRAIN-PM").iloc[0]
+        x["departure_time"] = departure_time
         x["path_flow"] = f
         return x[["panel", "departure_time", "path_id", "origin_zone", "destination_zone", "path_flow"]]
     frame(train_f).to_csv(out / f"{panel}_baseline_submission.csv", index=False)
@@ -116,6 +154,7 @@ def build_panel(panel: str, release: Path, output_root: Path) -> tuple[int, int]
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--release-root", type=Path, default=DEFAULT_RELEASE)
+    ap.add_argument("--split", choices=["train", "validation", "private"], default="validation")
     ap.add_argument("--output-root", type=Path, default=HERE / "reports" / "task4_odme")
     ap.add_argument("--panel", action="append")
     args = ap.parse_args()
@@ -130,7 +169,7 @@ def main() -> None:
     args.output_root.mkdir(parents=True, exist_ok=True)
     for panel in panels:
         print(f"[Task4 ODME artifacts] {panel}", flush=True)
-        npaths, nlinks = build_panel(panel, args.release_root.resolve(), args.output_root.resolve())
+        npaths, nlinks = build_panel(panel, args.release_root.resolve(), args.output_root.resolve(), args.split)
         print(f"  paths={npaths:,}, operator links={nlinks:,}", flush=True)
     # Convenience combined files for the evaluator and leaderboard smoke test.
     for suffix, name in [

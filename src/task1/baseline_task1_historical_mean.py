@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,7 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent.parent.parent
 DEFAULT_RELEASE = HERE / "data_public" / "kaggle_release"
 REGIMES = {"R1": 0.20, "R2": 0.30, "R3": 0.50}
+REGIME_ORDER = ("R1", "R2", "R3")
 SPEED_NORMALIZER = 25.0
 FLOW_NORMALIZER = 600.0
 SPEED_WEIGHT = 0.54
@@ -26,7 +28,21 @@ FLOW_WEIGHT = 0.46
 
 
 def files(panel_dir: Path, split: str) -> list[Path]:
-    return sorted((panel_dir / split / "mainline_states").glob("**/*.parquet"))
+    """The observation files for one split.
+
+    A split ships either the plain observation layer or, once the Task 1 targets
+    have been blanked out, the masked one. Only ``train`` carries both; on the
+    scored splits the masked layer is all there is.
+    """
+    direct = sorted((panel_dir / split / "mainline_states").glob("**/*.parquet"))
+    if direct:
+        return direct
+    return sorted((panel_dir / split / "mainline_states_masked").glob("**/*.parquet"))
+
+
+def masked_files(panel_dir: Path, split: str) -> list[Path]:
+    """The masked observation layer, which is what a Task 1 answer is built on."""
+    return sorted((panel_dir / split / "mainline_states_masked").glob("**/*.parquet"))
 
 
 def slot_values(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
@@ -36,10 +52,77 @@ def slot_values(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     return weekday, tod
 
 
+# The released parquet stores timestamp as text, and the mask hashes that text
+# verbatim. Two spellings of the same instant hash differently, so the format is
+# part of the frozen mask contract, not a formatting detail.
+TIMESTAMP_TEXT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+DATE_TEXT = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _require_mask_text(values: pd.Series, pattern: re.Pattern, field: str) -> pd.Series:
+    """Reject a timestamp/date spelling the frozen mask was not built on.
+
+    stable_mask hashes the raw text. Writing the same instant as a datetime64
+    renders it '2026-03-01 00:00:00+00:00' instead of '2026-03-01T00:00:00Z',
+    which agrees with the released mask on only 68% of cells - a different mask,
+    not a near-miss. Participants derive their target cells from the public
+    release while the organizer derives them from the private test, so a writer
+    that changes the spelling on one side makes every prediction miss, through
+    no fault of the participant. Checking the distinct values keeps this cheap:
+    a daily partition holds 288 of them.
+    """
+    text = values.astype(str)
+    distinct = pd.unique(text)
+    bad = [v for v in distinct if not pattern.match(v)]
+    if bad:
+        raise ValueError(
+            f"{field} is not in the canonical mask text form: {bad[:3]} "
+            f"({len(bad)} distinct value(s)). The stable R1/R2/R3 mask hashes this "
+            f"text verbatim, so a different spelling silently produces a different "
+            f"mask. Write the column as text in the released form "
+            f"(YYYY-MM-DDTHH:MM:SSZ for timestamp, YYYY-MM-DD for date) rather than "
+            f"as datetime64."
+        )
+    return text
+
+
+def regime_of_dates(panel: str, date_text: pd.Series) -> np.ndarray:
+    """The one regime each calendar day belongs to.
+
+    A day used to appear in all three regime views, each hiding an independently
+    drawn set of cells. Lining the three published files up side by side then
+    read a cell hidden in one view straight out of another: measured on the
+    generated release, that recovered 91.0% of the Task 1 answer key, on the
+    private prize split included (91.03% on D12_I5_N, 90.95% on D7_I405_N), with
+    no access to anything organizer-only - the hash is public and takes no
+    secret. Nesting the three masks does not close it, because the leak is not
+    in how the cells are drawn but in the existence of a second view of the same
+    day: any cell hidden in one view and shown in another is gone.
+
+    A day therefore belongs to exactly one regime and is published only in that
+    view. The assignment hashes the day rather than rotating through the
+    calendar, so no regime lands systematically on particular weekdays, and it
+    includes the panel so the ten corridors do not share one calendar.
+    """
+    keys = (panel + "|" + date_text).to_numpy()
+    # Take the whole digest, not one byte: 256 is not divisible by three, and
+    # the last-byte version drew R3 about ten days short of R1 over a 273-day
+    # train split.
+    buckets = np.fromiter(
+        (int.from_bytes(hashlib.blake2b(k.encode("utf-8"), digest_size=8).digest(), "big") % len(REGIME_ORDER)
+         for k in keys),
+        dtype=np.int8,
+        count=len(keys),
+    )
+    return np.asarray(REGIME_ORDER, dtype=object)[buckets]
+
+
 def stable_mask(panel: str, regime: str, dates: pd.Series, timestamps: pd.Series, links: pd.Series) -> np.ndarray:
     rate = REGIMES[regime]
-    values = (panel + "|" + regime + "|" + dates.astype(str) + "|" + timestamps.astype(str) + "|" + links.astype(str)).to_numpy()
-    return np.fromiter(
+    date_text = _require_mask_text(dates, DATE_TEXT, "date")
+    timestamp_text = _require_mask_text(timestamps, TIMESTAMP_TEXT, "timestamp")
+    values = (panel + "|" + regime + "|" + date_text + "|" + timestamp_text + "|" + links.astype(str)).to_numpy()
+    drawn = np.fromiter(
         (
             int.from_bytes(hashlib.blake2b(value.encode("utf-8"), digest_size=8).digest(), "big") / 2**64 < rate
             for value in values
@@ -47,6 +130,66 @@ def stable_mask(panel: str, regime: str, dates: pd.Series, timestamps: pd.Series
         dtype=bool,
         count=len(values),
     )
+    # A cell can only be a target on a day that belongs to this regime. Every
+    # caller - the builders, the baselines and both scorers - goes through here,
+    # so the day assignment cannot drift between the mask that is published and
+    # the mask that is scored.
+    return drawn & (regime_of_dates(panel, date_text) == regime)
+
+
+def station_lanes(panel_dir: Path) -> dict[str, float]:
+    """Lane count keyed by station id and by link id, for scoring flow per lane.
+
+    FLOW_NORMALIZER is 600, which only makes sense against a single lane's flow.
+    It arrived together with SPEED_SCALE 25 and DENS_SCALE 20 from the prototype
+    scorer, and a jam density of 20 veh/km can only be per-lane. Measured on the
+    release, all three constants sit at 0.30-1.06 of the data's spread once flow
+    and density are per-lane; total link flow sits at 2.97-5.21, five times
+    stricter than speed. Applied to total flow it drove S_flow to zero past
+    roughly 12% relative error and made panels incomparable: one fixed-quality
+    model scored S_flow from 0.0086 to 0.3255 across the ten panels on lane
+    count alone.
+
+    Both keys are returned because the two releases differ in shape. The real
+    fd_parameters.csv is one row per detector station and carries station_id;
+    the synthetic one written by research/build_synthetic_network_metadata.py is
+    one row per mainline link and carries neither station_id nor lanes, so the
+    lane count is taken from links.csv there. Station ids and link ids do not
+    collide, so a single mapping serves both.
+    """
+    lanes_by_key: dict[str, float] = {}
+
+    def absorb(frame: pd.DataFrame, key: str) -> None:
+        if key not in frame.columns or "lanes" not in frame.columns:
+            return
+        lanes = pd.to_numeric(frame["lanes"], errors="coerce")
+        # links.csv marks zone connectors with lanes=99; they carry no traffic
+        # and must never set a scoring denominator.
+        valid = lanes.notna() & (lanes >= 1) & (lanes <= 16)
+        lanes_by_key.update(zip(frame[key][valid].astype(str), lanes[valid].astype(float)))
+
+    fd = panel_dir / "network" / "fd_parameters.csv"
+    links = panel_dir / "network" / "links.csv"
+    # links.csv first so fd_parameters, which carries the detector count, wins.
+    if links.exists():
+        absorb(pd.read_csv(links, dtype={"link_id": str}), "link_id")
+    if fd.exists():
+        frame = pd.read_csv(fd, dtype={"station_id": str, "link_id": str})
+        absorb(frame, "link_id")
+        absorb(frame, "station_id")
+    if not lanes_by_key:
+        raise FileNotFoundError(
+            f"no lane count found under {panel_dir / 'network'}; flow is scored per lane, "
+            f"so links.csv or fd_parameters.csv must carry a lanes column"
+        )
+    return lanes_by_key
+
+
+def lane_vector(stations: pd.Series, links: pd.Series, lanes_by_key: dict[str, float]) -> np.ndarray:
+    """Lane count per row, by station id where known and by link id otherwise."""
+    by_station = stations.astype(str).map(lanes_by_key)
+    by_link = links.astype(str).map(lanes_by_key)
+    return pd.to_numeric(by_station.fillna(by_link), errors="coerce").fillna(1.0).clip(lower=1.0).to_numpy(dtype=float)
 
 
 def build_profile(panel: str, panel_dir: Path) -> tuple[dict, dict, dict]:
@@ -105,13 +248,14 @@ def build_profile(panel: str, panel_dir: Path) -> tuple[dict, dict, dict]:
 def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
     panel_dir = release / "corridors" / panel
     speed_profile, flow_profile, counts = build_profile(panel, panel_dir)
+    lanes_by_station = station_lanes(panel_dir)
     link_index = speed_profile["link_index"]
     predictions = []
     sums = {r: {"speed_sq": 0.0, "flow_sq": 0.0, "n": 0} for r in REGIMES}
     for i, path in enumerate(files(panel_dir, "validation"), 1):
         frame = pd.read_parquet(
             path,
-            columns=["date", "timestamp", "link_id", "speed_kmh", "flow_vph", "is_score_eligible"],
+            columns=["date", "timestamp", "station_id", "link_id", "speed_kmh", "flow_vph", "is_score_eligible"],
         )
         frame["link_id"] = frame["link_id"].astype(str)
         li = frame.link_id.map(link_index).to_numpy(dtype=np.int64)
@@ -134,7 +278,8 @@ def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
         for regime in REGIMES:
             mask = valid & stable_mask(panel, regime, dates, frame.timestamp, frame.link_id)
             ds = pred_speed[mask] - true_speed[mask]
-            dq = pred_flow[mask] - true_flow[mask]
+            # Flow is scored per lane; see station_lanes().
+            dq = (pred_flow[mask] - true_flow[mask]) / lane_vector(frame.station_id, frame.link_id, lanes_by_station)[mask]
             sums[regime]["speed_sq"] += float(np.sum(ds * ds))
             sums[regime]["flow_sq"] += float(np.sum(dq * dq))
             sums[regime]["n"] += int(mask.sum())
@@ -155,7 +300,7 @@ def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
                 "regime": regime,
                 "n_cells": s["n"],
                 "rmse_speed_kmh": rmse_speed,
-                "rmse_flow_vph": rmse_flow,
+                "rmse_flow_vph_per_lane": rmse_flow,
                 "S_speed": speed_score,
                 "S_flow": flow_score,
                 "S_state_regime": state_score,
@@ -167,7 +312,7 @@ def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
             "regime": "macro_mean",
             "n_cells": sum(s["n"] for s in sums.values()),
             "rmse_speed_kmh": np.nan,
-            "rmse_flow_vph": np.nan,
+            "rmse_flow_vph_per_lane": np.nan,
             "S_speed": np.nan,
             "S_flow": np.nan,
             "S_state_regime": float(np.mean([r["S_state_regime"] for r in rows])),

@@ -13,6 +13,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Make the sibling task packages importable when this file is run as a script,
+# so no PYTHONPATH is needed.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from task1.baseline_task1_historical_mean import (
     DEFAULT_RELEASE,
     FLOW_NORMALIZER,
@@ -24,7 +29,9 @@ from task1.baseline_task1_historical_mean import (
     build_profile,
     files,
     slot_values,
+    lane_vector,
     stable_mask,
+    station_lanes,
 )
 
 
@@ -90,6 +97,7 @@ def interpolate(values: np.ndarray, counts: np.ndarray, fallback: np.ndarray, ne
 
 def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
     panel_dir = release / "corridors" / panel
+    lanes_by_station = station_lanes(panel_dir)
     speed_profile, flow_profile, profile_counts = build_profile(panel, panel_dir)
     link_ids = speed_profile["link_ids"]
     link_index = speed_profile["link_index"]
@@ -97,7 +105,7 @@ def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
     for path in files(panel_dir, "validation"):
         frame = pd.read_parquet(
             path,
-            columns=["date", "timestamp", "link_id", "speed_kmh", "flow_vph", "is_score_eligible"],
+            columns=["date", "timestamp", "station_id", "link_id", "speed_kmh", "flow_vph", "is_score_eligible"],
         )
         frame["link_id"] = frame.link_id.astype(str)
         li = frame.link_id.map(link_index).fillna(-1).to_numpy(dtype=np.int64)
@@ -128,7 +136,8 @@ def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
             pred_flow = np.where(known, flow_local[safe_li, tod], flow_fallback)
             mask = target & np.isfinite(true_speed) & np.isfinite(true_flow) & np.isfinite(pred_speed) & np.isfinite(pred_flow)
             ds = pred_speed[mask] - true_speed[mask]
-            dq = pred_flow[mask] - true_flow[mask]
+            # Flow is scored per lane; see station_lanes().
+            dq = (pred_flow[mask] - true_flow[mask]) / lane_vector(frame.station_id, frame.link_id, lanes_by_station)[mask]
             sums[regime]["speed_sq"] += float(np.sum(ds * ds))
             sums[regime]["flow_sq"] += float(np.sum(dq * dq))
             sums[regime]["n"] += int(mask.sum())
@@ -145,7 +154,7 @@ def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
                 "regime": regime,
                 "n_cells": s["n"],
                 "rmse_speed_kmh": rmse_speed,
-                "rmse_flow_vph": rmse_flow,
+                "rmse_flow_vph_per_lane": rmse_flow,
                 "S_speed": speed_score,
                 "S_flow": flow_score,
                 "S_state_regime": SPEED_WEIGHT * speed_score + FLOW_WEIGHT * flow_score,
@@ -157,7 +166,7 @@ def evaluate_panel(panel: str, release: Path, output_root: Path) -> list[dict]:
             "regime": "macro_mean",
             "n_cells": sum(s["n"] for s in sums.values()),
             "rmse_speed_kmh": np.nan,
-            "rmse_flow_vph": np.nan,
+            "rmse_flow_vph_per_lane": np.nan,
             "S_speed": np.nan,
             "S_flow": np.nan,
             "S_state_regime": float(np.mean([r["S_state_regime"] for r in rows])),

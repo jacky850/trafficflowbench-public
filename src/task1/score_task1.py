@@ -1,9 +1,9 @@
 """Local evaluator for Task 1 masked state reconstruction.
 
-The scorer uses the public validation labels as truth.  It creates the frozen
-R1/R2/R3 target masks, joins the submitted speed/flow values, scores only
-eligible target cells, and aggregates direction -> corridor family -> overall
-state score with equal weights.
+Truth is the unmasked observation layer, which only the train split ships, so
+this evaluator runs on train. It reads the targets off the masked layer, joins
+the submitted speed and flow, scores eligible target cells only, and aggregates
+direction -> corridor family -> overall with equal weights.
 """
 from __future__ import annotations
 
@@ -14,6 +14,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Make the sibling task packages importable when this file is run as a script,
+# so no PYTHONPATH is needed.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from task1.baseline_task1_historical_mean import (
     DEFAULT_RELEASE,
     FLOW_NORMALIZER,
@@ -22,7 +27,8 @@ from task1.baseline_task1_historical_mean import (
     REGIMES,
     SPEED_NORMALIZER,
     SPEED_WEIGHT,
-    stable_mask,
+    lane_vector,
+    station_lanes,
 )
 
 
@@ -30,7 +36,25 @@ REQUIRED_COLUMNS = {"panel", "timestamp", "station_id", "link_id", "mask_regime"
 
 
 def release_files(release: Path, panel: str, split: str) -> list[Path]:
+    """The unmasked observation layer, which is the truth Task 1 is scored against.
+
+    Only ``train`` ships it. On the scored splits the answers are withheld, so
+    self-scoring runs on ``train``.
+    """
     return sorted((release / "corridors" / panel / split / "mainline_states").glob("**/*.parquet"))
+
+
+def masked_files(release: Path, panel: str, split: str, regime: str) -> list[Path]:
+    """The masked partitions published under one regime.
+
+    The release applies the Task 1 masks ahead of time and publishes each
+    calendar day under exactly one regime, so which cells are targets - and
+    under which regime - is read off the release rather than recomputed from a
+    hash. The masked layer is partitioned by regime, the unmasked one by month,
+    so the two are paired by file name.
+    """
+    root = release / "corridors" / panel / split / "mainline_states_masked" / f"mask_regime={regime}"
+    return sorted(root.glob("*.parquet"))
 
 
 def read_submission(path: Path) -> tuple[pd.DataFrame, list[str]]:
@@ -74,7 +98,12 @@ def read_submission(path: Path) -> tuple[pd.DataFrame, list[str]]:
 def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame) -> list[dict]:
     paths = release_files(release, panel, split)
     if not paths:
-        raise FileNotFoundError(f"{panel}: no {split} mainline partitions")
+        raise FileNotFoundError(
+            f"{panel}: no unmasked {split} partitions. Only the train split ships the "
+            "answers; validation and private are scored on the leaderboard."
+        )
+    truth_by_name = {p.name: p for p in paths}
+    lanes_by_station = station_lanes(release / "corridors" / panel)
     panel_submission = submission[submission.panel == panel].copy()
     rows = []
     for regime in REGIMES:
@@ -83,26 +112,36 @@ def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame)
         n_target = 0
         n_missing = 0
         n_invalid = 0
-        for path in paths:
+        for masked_path in masked_files(release, panel, split, regime):
+            path = truth_by_name.get(masked_path.name)
+            if path is None:
+                continue
             frame = pd.read_parquet(
                 path,
                 columns=["date", "timestamp", "station_id", "link_id", "speed_kmh", "flow_vph", "is_score_eligible"],
             )
             frame["link_id"] = frame.link_id.astype(str)
-            # Preserve the release's canonical timestamp text for the stable
-            # mask hash. Converting to a different datetime string first would
-            # silently generate a different R1/R2/R3 mask.
-            mask_timestamp = frame.timestamp.astype(str)
+            frame["station_id"] = frame.station_id.astype(str)
             frame["timestamp"] = pd.to_datetime(frame.timestamp, utc=True)
-            target = frame.is_score_eligible.astype(bool).to_numpy() & stable_mask(
-                panel, regime, frame.date, mask_timestamp, frame.link_id
+            blanked = pd.read_parquet(
+                masked_path,
+                columns=["timestamp", "station_id", "link_id", "speed_kmh", "flow_vph"],
             )
-            truth = frame.loc[target, ["timestamp", "station_id", "link_id", "speed_kmh", "flow_vph"]].copy()
+            blanked["link_id"] = blanked.link_id.astype(str)
+            blanked["station_id"] = blanked.station_id.astype(str)
+            blanked["timestamp"] = pd.to_datetime(blanked.timestamp, utc=True)
+            blanked = blanked[blanked.speed_kmh.isna() & blanked.flow_vph.isna()][
+                ["timestamp", "station_id", "link_id"]
+            ]
+            if blanked.empty:
+                continue
+            eligible = frame[frame.is_score_eligible.astype(bool)]
+            target_frame = eligible.merge(
+                blanked, on=["timestamp", "station_id", "link_id"], how="inner", validate="one_to_one"
+            )
+            truth = target_frame[["timestamp", "station_id", "link_id", "speed_kmh", "flow_vph"]].copy()
             if truth.empty:
                 continue
-            truth["timestamp"] = pd.to_datetime(truth.timestamp, utc=True)
-            truth["station_id"] = truth.station_id.astype(str)
-            truth["link_id"] = truth.link_id.astype(str)
             truth = truth.rename(columns={"speed_kmh": "true_speed", "flow_vph": "true_flow"})
             pred = panel_submission[panel_submission.mask_regime == regime][
                 ["timestamp", "station_id", "link_id", "speed_kmh", "flow_vph"]
@@ -119,20 +158,33 @@ def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame)
             pred_speed = np.where(np.isfinite(pred_speed), pred_speed, 0.0)
             pred_flow = np.where(np.isfinite(pred_flow), pred_flow, 0.0)
             usable = ~invalid_truth
+            # Flow is scored per lane: FLOW_NORMALIZER is a single lane's scale,
+            # so dividing by the station's lane count is what makes a 4-lane and
+            # an 8-lane panel comparable.
+            lanes = lane_vector(merged.station_id, merged.link_id, lanes_by_station)
             ds = pred_speed[usable] - true_speed[usable]
-            dq = pred_flow[usable] - true_flow[usable]
+            dq = (pred_flow[usable] - true_flow[usable]) / lanes[usable]
             total_sq_speed += float(np.sum(ds * ds))
             total_sq_flow += float(np.sum(dq * dq))
             n_target += int(usable.sum())
             n_missing += int(missing[usable].sum())
             n_invalid += int(invalid_truth.sum())
 
-        n = max(n_target, 1)
-        rmse_speed = float(np.sqrt(total_sq_speed / n))
-        rmse_flow = float(np.sqrt(total_sq_flow / n))
-        speed_score = max(0.0, 1.0 - rmse_speed / SPEED_NORMALIZER)
-        flow_score = max(0.0, 1.0 - rmse_flow / FLOW_NORMALIZER)
-        state_score = SPEED_WEIGHT * speed_score + FLOW_WEIGHT * flow_score
+        if n_target == 0:
+            # No scoreable cell means no evidence, not a perfect answer. The old
+            # guard divided by max(n_target, 1) to avoid a zero division, but the
+            # numerator is zero too, so an empty panel scored RMSE 0 and took
+            # S_state = 1.0 - a generation failure or a panel whose cells all
+            # became ineligible would have been rewarded instead of surfaced.
+            # score_task3.score_panel already returns 0.0 in this situation.
+            rmse_speed = rmse_flow = float("nan")
+            speed_score = flow_score = state_score = 0.0
+        else:
+            rmse_speed = float(np.sqrt(total_sq_speed / n_target))
+            rmse_flow = float(np.sqrt(total_sq_flow / n_target))
+            speed_score = max(0.0, 1.0 - rmse_speed / SPEED_NORMALIZER)
+            flow_score = max(0.0, 1.0 - rmse_flow / FLOW_NORMALIZER)
+            state_score = SPEED_WEIGHT * speed_score + FLOW_WEIGHT * flow_score
         rows.append(
             {
                 "level": "panel_regime",
@@ -143,7 +195,7 @@ def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame)
                 "n_missing_predictions": n_missing,
                 "n_invalid_truth": n_invalid,
                 "rmse_speed_kmh": rmse_speed,
-                "rmse_flow_vph": rmse_flow,
+                "rmse_flow_vph_per_lane": rmse_flow,
                 "S_speed": speed_score,
                 "S_flow": flow_score,
                 "S_state": state_score,
@@ -160,7 +212,7 @@ def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame)
             "n_missing_predictions": sum(r["n_missing_predictions"] for r in panel_rows),
             "n_invalid_truth": sum(r["n_invalid_truth"] for r in panel_rows),
             "rmse_speed_kmh": np.nan,
-            "rmse_flow_vph": np.nan,
+            "rmse_flow_vph_per_lane": np.nan,
             "S_speed": np.nan,
             "S_flow": np.nan,
             "S_state": float(np.mean([r["S_state"] for r in panel_rows])) if panel_rows else 0.0,
@@ -173,7 +225,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--submission", type=Path, required=True)
     ap.add_argument("--release-root", type=Path, default=DEFAULT_RELEASE)
-    ap.add_argument("--split", choices=["validation", "train"], default="validation")
+    ap.add_argument("--split", choices=["validation", "train", "private"], default="validation")
     ap.add_argument("--output", type=Path, default=HERE / "reports" / "task1_eval_validation.csv")
     ap.add_argument("--panel", action="append", help="score only selected panel(s), mainly for smoke tests")
     args = ap.parse_args()
@@ -214,7 +266,7 @@ def main() -> None:
                 "n_missing_predictions": int(group.n_missing_predictions.sum()),
                 "n_invalid_truth": int(group.n_invalid_truth.sum()),
                 "rmse_speed_kmh": np.nan,
-                "rmse_flow_vph": np.nan,
+                "rmse_flow_vph_per_lane": np.nan,
                 "S_speed": np.nan,
                 "S_flow": np.nan,
                 "S_state": float(group.S_state.mean()),
@@ -232,7 +284,7 @@ def main() -> None:
                 "n_missing_predictions": int(family_df.n_missing_predictions.sum()),
                 "n_invalid_truth": int(family_df.n_invalid_truth.sum()),
                 "rmse_speed_kmh": np.nan,
-                "rmse_flow_vph": np.nan,
+                "rmse_flow_vph_per_lane": np.nan,
                 "S_speed": np.nan,
                 "S_flow": np.nan,
                 "S_state": float(family_df.S_state.mean()),

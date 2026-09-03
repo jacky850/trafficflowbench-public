@@ -1,7 +1,12 @@
 """Build a complete Task 1 submission from the enhanced baseline.
 
-The output contains one row for every eligible masked target cell in public
-validation, for all three regimes.  It is suitable for score_task1.py.
+The output contains one row for every eligible masked target cell of the chosen
+split. It is suitable for score_task1.py, and for score_task3.py, which is
+scored on this same file.
+
+The release ships the masks already applied, one regime per calendar day, so
+the targets are read off the data rather than recomputed: a target is an
+eligible cell whose speed and flow the release has blanked out.
 """
 from __future__ import annotations
 
@@ -12,33 +17,36 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Make the sibling task packages importable when this file is run as a script,
+# so no PYTHONPATH is needed.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parent.parent))
+
 from task1.baseline_task1_enhanced import interpolate, local_matrix
 from task1.baseline_task1_historical_mean import (
     DEFAULT_RELEASE,
     HERE,
-    REGIMES,
     build_profile,
-    files,
+    masked_files,
     slot_values,
-    stable_mask,
 )
 
 
 OUTPUT_COLUMNS = ["panel", "timestamp", "station_id", "link_id", "mask_regime", "speed_kmh", "flow_vph"]
 
 
-def build_panel_submission(panel: str, release: Path, output: Path, write_header: bool) -> int:
+def build_panel_submission(panel: str, release: Path, split: str, output: Path, write_header: bool) -> int:
     panel_dir = release / "corridors" / panel
     speed_profile, flow_profile, profile_counts = build_profile(panel, panel_dir)
     link_ids = speed_profile["link_ids"]
     link_index = speed_profile["link_index"]
     rows_written = 0
-    for path in files(panel_dir, "validation"):
+    for path in masked_files(panel_dir, split):
         frame = pd.read_parquet(
             path,
             columns=[
                 "date", "timestamp", "station_id", "link_id", "speed_kmh",
-                "flow_vph", "is_score_eligible",
+                "flow_vph", "is_score_eligible", "mask_regime",
             ],
         )
         frame["station_id"] = frame.station_id.astype(str)
@@ -61,9 +69,13 @@ def build_panel_submission(panel: str, release: Path, output: Path, write_header
             base_flow,
         )
         valid_base = frame.is_score_eligible.astype(bool).to_numpy()
+        # A target is an eligible cell the release blanked out. One file carries
+        # one regime, so the loop runs once; it stays a loop so a release that
+        # publishes several views of a day still builds correctly.
+        blanked = valid_base & frame.speed_kmh.isna().to_numpy() & frame.flow_vph.isna().to_numpy()
 
-        for regime in REGIMES:
-            target = valid_base & stable_mask(panel, regime, frame.date, frame.timestamp, frame.link_id)
+        for regime in pd.unique(frame.mask_regime.astype(str)):
+            target = blanked & (frame.mask_regime.astype(str) == regime).to_numpy()
             _, _, _, speed_sum, speed_n, flow_sum, flow_n = local_matrix(frame, link_ids, target)
             speed_local = interpolate(speed_sum, speed_n, speed_profile["fallback"])
             flow_local = interpolate(flow_sum, flow_n, flow_profile["fallback"])
@@ -96,6 +108,7 @@ def build_panel_submission(panel: str, release: Path, output: Path, write_header
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--release-root", type=Path, default=DEFAULT_RELEASE)
+    ap.add_argument("--split", choices=["train", "validation", "private"], default="validation")
     ap.add_argument("--output", type=Path, default=HERE / "reports" / "task1_enhanced_state_submission.csv")
     ap.add_argument("--panel", action="append", help="build only selected panel(s), mainly for smoke tests")
     args = ap.parse_args()
@@ -114,7 +127,7 @@ def main() -> None:
     first = True
     for panel in panels:
         print(f"[Task1 submission] {panel}", flush=True)
-        count = build_panel_submission(panel, args.release_root.resolve(), args.output.resolve(), first)
+        count = build_panel_submission(panel, args.release_root.resolve(), args.split, args.output.resolve(), first)
         total += count
         first = False
         print(f"  wrote {count:,} target rows", flush=True)

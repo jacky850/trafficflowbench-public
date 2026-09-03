@@ -1,43 +1,69 @@
-# Public baselines
+# Baselines
 
-The repository exposes one runnable baseline family per task. Baseline output
-CSV files are local QA artifacts and are not committed to GitHub.
+One runnable baseline per task, in `src/`. They exist to give you a starting
+point and a number to beat, not to be strong.
 
-## Task 1 — enhanced masked-state baseline
+## Task 1 — profile plus interpolation
 
-`src/task1/baseline_task1_enhanced.py` combines a public-train weekday/time-of-
-day profile with same-day temporal and spatial interpolation. The builder
-`src/task1/build_task1_baseline_submission.py` applies the frozen R1/R2/R3
-masks and writes speed and flow predictions for all ten panels.
+`src/task1/baseline_task1_enhanced.py` combines a weekday × time-of-day flow and
+speed profile learned from `train` with same-day temporal and spatial
+interpolation around each blanked cell. The builder emits exactly the required
+row set:
 
-The historical-mean implementation remains available as a simpler comparison:
-`src/task1/baseline_task1_historical_mean.py`. The structural Kalman variant is
-optional teaching code: `src/task1/baseline_task1_structural_kf.py`.
+```bash
+python src/task1/build_task1_baseline_submission.py \
+  --release-root $REL --split train --output state_submission.csv
+```
 
-## Task 2 — persistence queue baseline
+`baseline_task1_historical_mean.py` is the simpler comparison — profile only, no
+interpolation. `baseline_task1_structural_kf.py` is optional teaching code that
+runs a structural Kalman filter per link.
 
-`src/task2/build_task2_persistence_submission.py` copies the queue status at
-the forecast origin through the six future five-minute cells. It uses the
-released queue-window index and does not use future queue labels.
+## Task 2 — persistence
 
-## Task 3 — ramp-aware physics baseline
+`src/task2/build_task2_persistence_submission.py` reads the queue state at the
+forecast origin and repeats it through all six future cells. It uses only the
+released 60-minute history and never touches a future label.
 
-`src/task3/build_task3_baseline_submission.py` reconstructs the complete state
-from the Task 1 submission and emits the required physics fields, including
-derived density, boundary flows, ramp flows, validity flags, and accumulation.
-`src/task3/score_task3.py` applies the fixed per-lane FD and total-flow LWR
-scoring rule with the panel's published coverage mode.
+```bash
+python src/task2/build_task2_persistence_submission.py \
+  --release-root $REL --split validation --output queue_submission.csv
+```
 
-## Task 4 — regularized ODME baseline
+## Task 3 — nothing to build
 
-`src/task4/build_task4_odme_artifacts.py` solves the nonnegative,
-prior-regularized path-flow problem from released train counts. The evaluator
-`src/task4/score_task4.py` reports path-flow, loaded-link, prior-deviation, and
-destination-attraction components.
+Task 3 is scored on your Task 1 file, so its baseline is whatever your Task 1
+baseline produces. `src/task3/build_task3_baseline_submission.py` remains for
+the legacy self-contained physics frame and is not a submission route.
 
-## What is not shipped
+## Task 4 — regularised ODME
 
-Raw PeMS downloaders, public-release builders, hidden-answer generators,
-topology construction utilities, old gate/ranking experiments, and research
-demos are kept in the organizer's private working copy. They are deliberately
-absent from the public Release 1.0 branch.
+`src/task4/build_task4_odme_artifacts.py` solves the non-negative,
+prior-regularised path-flow problem against the released link counts:
+
+```text
+minimize  ||A f - c||^2 + lambda * ||f - b||^2   subject to f >= 0
+```
+
+with `A` the released path-link incidence, `c` the released counts, `b` the
+released weak prior, and `lambda = 0.05`.
+
+## What the reference baselines score
+
+The organizers scored a deliberately naive baseline per task against a perfect
+submission, averaged over the ten corridors on the validation split. Task 1 here
+is the historical-mean baseline, weaker than the enhanced one shipped above.
+
+| | Naive baseline | Perfect answer |
+|---|---:|---:|
+| `S_state` | 0.6903 | 1.0000 |
+| `S_queue` | 0.2518 | 1.0000 |
+| `S_physics` | 0.3467 | 0.9581 |
+| `S_ODME` | 0.5904 | 1.0000 |
+| **`S_total`** | **0.4872** | **0.9937** |
+
+Two things to read from this table. The gap between the columns is the room a
+method has to work in, and it is wide in every task. And `S_physics` does not
+reach 1.0 even for an exact answer: the conservation residual is checked against
+observations that carry measurement noise, so about 0.96 is the practical
+ceiling. That ceiling is identical for everyone.

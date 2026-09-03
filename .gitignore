@@ -1,22 +1,15 @@
 __pycache__/
-*.pyc
+*.py[cod]
+.ipynb_checkpoints/
 .venv/
-organizer_private/
-data_private/
-data_work/
-data_public/private/
+venv/
+.env
 
-# The complete public data package is distributed through Kaggle, not GitHub.
-# Keep manifests, schemas, templates, and documentation tracked, but do not commit
-# the multi-gigabyte corridor partitions or queue target parquet files.
-data_public/kaggle_release/corridors/
-data_public/kaggle_release/task2/train/queue_targets.parquet
-data_public/kaggle_release/task2/validation/queue_targets.parquet
-data_public/release_smoke/
-
-# Complete public-validation submission universes are generated locally and
-# distributed through the data host; several exceed GitHub's 100 MiB limit.
-data_public/kaggle_release/submission_templates/*_public_validation.csv
-
-# Local baseline/evaluator outputs are reproducibility artifacts, not source files.
-reports/
+# Local data and results. The data package is distributed through Kaggle and is
+# never committed here.
+/data/
+/release/
+/reports/
+*.parquet
+submission*.csv
+*_submission.csv
