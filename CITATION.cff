@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: "TrafficFlowBench: a four-task freeway traffic benchmark"
+message: "If you use this benchmark or its data package, please cite it."
+type: dataset
+authors:
+  - family-names: Wu
+    given-names: Jinxi
+    affiliation: Arizona State University
+    email: jinxiwu@asu.edu
+version: "1.0"
+date-released: "2026-09-03"
+url: "https://github.com/jacky850/trafficflowbench-public"
+license: MIT
+keywords:
+  - traffic state estimation
+  - queue prediction
+  - origin-destination estimation
+  - traffic flow theory
+  - benchmark

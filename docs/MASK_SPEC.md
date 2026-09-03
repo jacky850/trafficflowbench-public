@@ -51,6 +51,20 @@ The practical consequence: a regime is a property of the day, not a knob you can
 turn. R3 days are harder because half of every eligible cell is gone, and they
 are the days that dominate the row count.
 
+**The three regimes do not get equal numbers of days.** The assignment is drawn
+per day, so on a 31-day split one regime may land on fourteen days and another on
+four — on `D7_I405_N` validation, R3 covers only four. `S_state` still averages
+the three regimes **equally**, so on some corridors one third of your state score
+rests on a handful of days and will be noisier than the rest. That is the same
+for every participant.
+
+If you want to reproduce the mask yourself rather than read it off the files, it
+is `blake2b(panel|regime|date|timestamp|link_id)` taken as a big-endian 64-bit
+integer, divided by 2^64, compared against the regime's rate — using the
+timestamp and date text exactly as stored. `stable_mask()` in
+`src/task1/baseline_task1_historical_mean.py` is the reference implementation,
+and it reproduces the published blanks exactly.
+
 ## Coverage and penalties
 
 For each corridor and regime, the required rows are exactly the eligible masked

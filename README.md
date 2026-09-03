@@ -50,6 +50,13 @@ Put together: **fill the gaps, respect the physics, predict what comes next, and
 explain where the traffic came from.** That is the loop a traffic centre runs,
 and no single one of those steps is worth much alone.
 
+![Task 1: put the missing cells back](figures/task1_what_is_asked.png)
+
+One corridor, one weekday, colour is speed. The left panel is what the road did;
+the right is what you are given. The congestion is still legible through the
+holes — that is what makes the task solvable, and what makes a method that
+understands traffic beat one that interpolates.
+
 ## How the tasks connect
 
 ```text
@@ -107,15 +114,11 @@ to null, plus ramp flows and the full network. The removal rate is one of three
 regimes — R1 removes 20% of eligible cells, R2 30%, R3 50% — and each calendar
 day is published under exactly one of them.
 
-**What you submit.** One speed and one flow for every blanked eligible cell:
-
-```text
-panel,timestamp,station_id,link_id,mask_regime,speed_kmh,flow_vph
-```
-
-The required rows are enumerated for you in
-`task1/<PANEL>/<split>/sample_submission_state.csv`. A missing row scores as a
-zero prediction and still counts in the denominator.
+**What you submit.** One speed and one flow for every blanked eligible cell. The
+required rows are enumerated for you in
+`task1/<PANEL>/<split>/sample_submission_state.csv` — fill in two columns and you
+have a valid submission. A missing row scores as a zero prediction and still
+counts in the denominator.
 
 **How it is scored.** Per regime, then averaged over the three:
 
@@ -157,11 +160,7 @@ split:
 Both guarantee a queue somewhere in the horizon, so no window can be won by
 predicting "no queue everywhere" and collecting a free mark.
 
-**What you submit.** A binary indicator per link and future timestamp:
-
-```text
-window_id,timestamp,link_id,queue_pred
-```
+**What you submit.** A binary indicator per link and future timestamp.
 
 **How it is scored.** Space-time intersection-over-union per window, averaged
 with equal weight across windows and conditions:
@@ -229,14 +228,18 @@ less than 0.03 across the same range. Which transitions are scored depends on
 your corridor's ramp-observation coverage — the table is frozen and published in
 [`docs/TASK3_LWR_COVERAGE_MODES.md`](docs/TASK3_LWR_COVERAGE_MODES.md).
 
-```bash
-python src/task3/score_task3.py \
-  --state-submission state_submission.csv --release-root $REL --split train
-```
+**You cannot score this one locally.** Conservation is checked against organizer
+boundary flows, and those are never published — they are the flow field itself,
+which is the Task 1 answer. `score_task3.py` still runs, but without them it
+falls back to a topology estimate that is too coarse for the check, and every
+submission floors at the same number. On `D12_I5_N` a perfect answer scores
+0.3301 locally against 0.3299 for the naive baseline; with the organizer flows
+those two are **0.9598 and 0.3242**. Read the evaluator for the rule, and let the
+leaderboard produce the number.
 
-Note that the naive baseline scores about 0.35 here against roughly 0.96 for an
-exact answer. That gap is the largest in the benchmark, and it is the clearest
-signal that fitting cells one at a time is not enough.
+That gap — 0.32 against 0.96 — is the largest in the benchmark, and it is the
+clearest signal that fitting cells one at a time is not enough. The lever is the
+Task 1 answer, and Task 1 *does* score locally.
 
 ---
 
@@ -250,14 +253,9 @@ close to what is plausible.
 **What you get.** The path set, the path-link incidence matrix `A`, the released
 link counts `c` for one demand period, and a weak path-flow prior `b`.
 
-**What you submit.**
-
-```text
-panel,departure_time,path_id,origin_zone,destination_zone,path_flow
-```
-
-Flows must be finite and non-negative, and `departure_time` is a period token
-rather than a timestamp — copy it from the template.
+**What you submit.** One flow per path. Flows must be finite and non-negative,
+and `departure_time` is a period token rather than a timestamp — copy it from the
+template.
 
 **How it is scored.** Four components: how close your path flows are to the
 reference, whether they reproduce the counts when loaded onto the network, how
@@ -328,11 +326,11 @@ python src/task1/build_task1_baseline_submission.py \
   --release-root $REL --split train --panel D12_I5_N --output state_submission.csv
 python src/task1/score_task1.py \
   --submission state_submission.csv --release-root $REL --split train --panel D12_I5_N
-python src/task3/score_task3.py \
-  --state-submission state_submission.csv --release-root $REL --split train --panel D12_I5_N
 ```
 
-One corridor runs in minutes; drop `--panel` for all ten. The full walkthrough,
+One corridor runs in minutes; drop `--panel` for all ten. Tasks 2 and 3 cannot
+be scored locally — their labels and boundary flows are withheld — so develop
+against Task 1 and let the leaderboard score the rest. The full walkthrough,
 including how to build the file you upload, is in
 [`docs/RUN_LOCAL.md`](docs/RUN_LOCAL.md).
 
@@ -358,4 +356,24 @@ docs/        the scoring rule, schemas, masks, data layout, baselines
 | [`BASELINES.md`](docs/BASELINES.md) | What do the baselines do, and what do they score? |
 | [`TASK3_LWR_COVERAGE_MODES.md`](docs/TASK3_LWR_COVERAGE_MODES.md) | Which transitions is my corridor judged on? |
 
-Official rules, deadlines and prizes are on the Kaggle competition page.
+## Rules, licence, contact
+
+Official rules, deadlines, eligibility and prizes are on the **Kaggle
+competition page** — that page is authoritative and this repository does not
+restate it.
+
+Two rules are worth repeating here because they are about the data rather than
+the contest:
+
+- **Do not submit values taken from an organizer-only file.** Every split has a
+  legitimate route to an answer; none of them involves a file you were not given.
+- **The released records are synthetic and are not a substitute for measured
+  traffic data.** Please do not present them as observations of a real freeway.
+
+The code in this repository is MIT licensed ([`LICENSE`](LICENSE)). If the
+benchmark is useful in published work, [`CITATION.cff`](CITATION.cff) has the
+citation metadata.
+
+Questions about the data or the evaluators belong in the Kaggle discussion
+forum, so that the answer reaches everyone at once. Issues in this repository
+are for defects in the code or the documentation.

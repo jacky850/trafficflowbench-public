@@ -5,8 +5,8 @@ exist. A link with an on-ramp whose flow is unavailable has no measurable
 `r_on`, and scoring that transition as if the ramp carried zero vehicles would
 punish a correct submission for a missing detector.
 
-Each corridor is therefore assigned one of three coverage modes, which decides
-which transitions enter `S_LWR`:
+Each corridor is therefore assigned a coverage mode, which decides which
+transitions enter `S_LWR`:
 
 | Mode | What is scored |
 |---|---|
@@ -22,16 +22,24 @@ Mode B: coverage >= 0.25 and valid cells >= 100,000
 Mode C: coverage <  0.25  or valid cells <  100,000
 ```
 
-## The table is frozen and public
+## All ten corridors are Mode A
 
-The assignment is **not** re-derived at scoring time. It lives in
-[`../config/task3_lwr_modes.json`](../config/task3_lwr_modes.json), which the
-evaluator reads by default, and it is identical for every participant and every
-run. It is published so you can see exactly which transitions your corridor is
-judged on before you submit.
+Detector health in this release is uniform by design — every corridor carries
+the same `pct_observed` distribution — so ramp coverage comes out the same
+everywhere, at **0.7560**, and all ten corridors clear the Mode A threshold.
+Nothing is scored under a weaker rule than anything else.
+
+That figure sits about 0.006 above the A/B boundary, which is close. The table is
+therefore **derived once from the published release and frozen**, rather than
+re-measured at scoring time, so no corridor can drift across the line between
+one evaluation and the next.
+
+It lives in [`../config/task3_lwr_modes.json`](../config/task3_lwr_modes.json),
+which the evaluator reads by default, and it is identical for every participant
+and every run:
 
 ```bash
-python -c "import json;print(json.load(open('config/task3_lwr_modes.json'))['panels'])"
+python -c "import json;print({k:v['mode'] for k,v in json.load(open('config/task3_lwr_modes.json'))['panels'].items()})"
 ```
 
 Ramp validity requires `is_score_eligible`, `pct_observed >= 75`, and a finite

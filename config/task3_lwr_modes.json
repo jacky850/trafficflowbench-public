@@ -1,5 +1,10 @@
 {
-  "policy_version": "qa-lwr-coverage-v1",
+  "policy_version": "synthetic-lwr-coverage-v1",
+  "derived_from": {
+    "split": "validation",
+    "source": "synthetic ramp observations only",
+    "note": "derived once from the published release and frozen; identical for every participant and every run"
+  },
   "minimum_valid_cells": 100000,
   "thresholds": {
     "mode_a_coverage": 0.75,
@@ -7,15 +12,127 @@
     "ramp_cell_pct_observed": 75
   },
   "panels": {
-    "D7_I10_E": {"mode": "B", "coverage": 0.256787, "valid_cells": 265583},
-    "D7_I10_W": {"mode": "B", "coverage": 0.337698, "valid_cells": 346255},
-    "D7_I210_E": {"mode": "B", "coverage": 0.300014, "valid_cells": 262143},
-    "D7_I210_W": {"mode": "B", "coverage": 0.359895, "valid_cells": 343344},
-    "D7_I405_N": {"mode": "C", "coverage": 0.067935, "valid_cells": 62388},
-    "D7_I405_S": {"mode": "C", "coverage": 0.043962, "valid_cells": 44292},
-    "D12_I5_N": {"mode": "A", "coverage": 0.761247, "valid_cells": 760175},
-    "D12_I5_S": {"mode": "B", "coverage": 0.652854, "valid_cells": 622831},
-    "D12_I405_N": {"mode": "B", "coverage": 0.457164, "valid_cells": 220108},
-    "D12_I405_S": {"mode": "B", "coverage": 0.460420, "valid_cells": 192940}
-  }
+    "D12_I405_N": {
+      "mode": "A",
+      "coverage": 0.755976,
+      "valid_cells": 364465,
+      "ramp_cells": 482112
+    },
+    "D12_I405_S": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 317219,
+      "ramp_cells": 419616
+    },
+    "D12_I5_N": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 755927,
+      "ramp_cells": 999936
+    },
+    "D12_I5_S": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 722180,
+      "ramp_cells": 955296
+    },
+    "D7_I10_E": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 782924,
+      "ramp_cells": 1035648
+    },
+    "D7_I10_W": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 776175,
+      "ramp_cells": 1026720
+    },
+    "D7_I210_E": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 661436,
+      "ramp_cells": 874944
+    },
+    "D7_I210_W": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 722180,
+      "ramp_cells": 955296
+    },
+    "D7_I405_N": {
+      "mode": "A",
+      "coverage": 0.755976,
+      "valid_cells": 695183,
+      "ramp_cells": 919584
+    },
+    "D7_I405_S": {
+      "mode": "A",
+      "coverage": 0.755975,
+      "valid_cells": 762676,
+      "ramp_cells": 1008864
+    }
+  },
+  "boundary_warnings": [
+    {
+      "panel": "D12_I405_N",
+      "mode": "A",
+      "coverage": 0.755976,
+      "margin_to_nearest_boundary": 0.005976
+    },
+    {
+      "panel": "D12_I405_S",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    },
+    {
+      "panel": "D12_I5_N",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    },
+    {
+      "panel": "D12_I5_S",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    },
+    {
+      "panel": "D7_I10_E",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    },
+    {
+      "panel": "D7_I10_W",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    },
+    {
+      "panel": "D7_I210_E",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    },
+    {
+      "panel": "D7_I210_W",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    },
+    {
+      "panel": "D7_I405_N",
+      "mode": "A",
+      "coverage": 0.755976,
+      "margin_to_nearest_boundary": 0.005976
+    },
+    {
+      "panel": "D7_I405_S",
+      "mode": "A",
+      "coverage": 0.755975,
+      "margin_to_nearest_boundary": 0.005975
+    }
+  ]
 }

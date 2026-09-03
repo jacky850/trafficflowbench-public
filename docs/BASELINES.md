@@ -58,12 +58,12 @@ is the historical-mean baseline, weaker than the enhanced one shipped above.
 |---|---:|---:|
 | `S_state` | 0.6903 | 1.0000 |
 | `S_queue` | 0.2518 | 1.0000 |
-| `S_physics` | 0.3467 | 0.9581 |
+| `S_physics` | 0.3467 | 0.9544 |
 | `S_ODME` | 0.5904 | 1.0000 |
-| **`S_total`** | **0.4872** | **0.9937** |
+| **`S_total`** | **0.4872** | **0.9932** |
 
 Two things to read from this table. The gap between the columns is the room a
 method has to work in, and it is wide in every task. And `S_physics` does not
 reach 1.0 even for an exact answer: the conservation residual is checked against
-observations that carry measurement noise, so about 0.96 is the practical
+observations that carry measurement noise, so about 0.95 is the practical
 ceiling. That ceiling is identical for everyone.
