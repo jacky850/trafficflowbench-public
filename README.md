@@ -214,40 +214,59 @@ real traffic. Two things a real freeway always satisfies:
 N(t+dt) - N(t) = dt * (q_in + r_on - q_out - r_off)
 ```
 
-**What you submit.** Nothing. Task 3 is scored on your Task 1 file. The evaluator
-derives the rest itself: density as `q/v`, accumulation as `k·L`, boundary flows
-from the released topology, ramp flows from the released ramp observations.
+**What you submit.** Nothing. Task 3 reads the speeds and flows already in your
+Task 1 file and works out the rest on its own: density is `q/v`, the number of
+vehicles on a link is `k` times its length, boundary flows come from the released
+topology, and ramp flows from the released ramp observations.
 
-This is deliberate. When Task 3 accepted its own submission, a participant could
-declare `k = q/v_f` and score 0.9999 on the diagram term instead of an honest
-0.8833. Or project boundary flows straight onto the conservation equation and
-score a perfect 1.0 whatever state they had submitted. Anchoring the score to the
-Task 1 answer closes both routes by construction.
+Nothing here is yours to choose, which is the point. There is no knob you can
+turn on Task 3 alone. The only way to move this score is to submit a better Task
+1 answer.
 
-**How it is scored.**
+**How it is scored.** Two terms, weighted:
 
 ```text
 S_physics = (1/3)*S_FD + (2/3)*S_LWR
 ```
 
-`S_LWR` carries the discrimination. It falls monotonically as error is injected
-and goes to zero for a submission that erases congestion, while `S_FD` moves by
-less than 0.03 across the same range. Which transitions are scored depends on
-your corridor's ramp-observation coverage. That table is frozen and published in
+`S_FD` asks whether your speed and flow land on the fundamental diagram. Most
+submissions score well here, and it barely separates a good answer from a bad
+one: across the whole range of submission quality it moves by less than 0.03.
+
+`S_LWR` is where the score is really won. It measures how badly conservation is
+violated, it falls steadily as error grows, and it goes to zero for a
+reconstruction that smooths congestion away. Which link-to-link transitions are
+counted depends on how much of your corridor's ramp flow was observed, and that
+table is fixed and published in
 [`docs/TASK3_LWR_COVERAGE_MODES.md`](docs/TASK3_LWR_COVERAGE_MODES.md).
 
-**You cannot score this one locally.** Conservation is checked against organizer
-boundary flows, and those are never published. Inflow and outflow per link are
-the flow field itself, which is the Task 1 answer. `score_task3.py` still runs,
-but without them it falls back to a topology estimate that is too coarse for the
-check, and every submission floors at the same number. On `D12_I5_N` a perfect
-answer scores 0.3301 locally against 0.3299 for the naive baseline. With the
-organizer flows those two are **0.9598 and 0.3242**. Read the evaluator for the
-rule, and let the leaderboard produce the number.
+**You cannot score this one on your own machine.** The evaluator is published and
+you are welcome to read it, but the data it needs is not. Conservation is checked
+against the true flow into and out of every link, and that is the flow field
+itself, which is exactly what Task 1 asks you to estimate. Releasing it would
+release the answer.
 
-That gap, 0.32 against 0.96, is the largest in the benchmark. It is the clearest
-signal that fitting cells one at a time is not enough. The lever is the Task 1
-answer, and Task 1 does score locally.
+Run `score_task3.py` anyway and it falls back to estimating those boundary flows
+from your own submitted flows. That estimate is not precise enough. The
+conservation signal is about 0.75% of the vehicles on a link, and the estimate is
+off by about 0.22%, so a third of the signal is noise. `S_LWR` comes out as zero
+for everybody, and you are left with a third of `S_FD`:
+
+```text
+S_physics = (1/3)*0.98 + (2/3)*0 = 0.33      for every submission
+```
+
+That is why a perfect answer and the naive baseline both score about 0.33 locally
+on `D12_I5_N`, 0.3301 against 0.3299. Scored properly, the same two submissions
+are **0.9598 and 0.3242**.
+
+That gap is the largest in the benchmark, and it is the clearest sign that
+fitting cells one at a time is not enough. You can make every cell's error small
+and still have vehicles appearing and vanishing between neighbouring links.
+Conservation catches that. RMSE does not.
+
+So work on Task 1, which does score locally, and let the leaderboard tell you
+what Task 3 makes of it.
 
 ---
 
