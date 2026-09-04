@@ -1,7 +1,7 @@
 # The data package
 
-The data is distributed through the Kaggle competition Data page, not through
-this repository. Download it and point the scripts at it with `--release-root`.
+The data is distributed through the [Kaggle competition Data page](https://www.kaggle.com/competitions/2026-ieee-big-data-traffic-flow-bench/data),
+not through this repository. Download it and point the scripts at it with `--release-root`.
 
 ## Layout
 
