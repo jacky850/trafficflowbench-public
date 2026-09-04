@@ -328,6 +328,14 @@ python src/task4/build_task4_odme_artifacts.py \
 
 ## The data
 
+The package is on the Kaggle Data page:
+https://www.kaggle.com/competitions/2026-ieee-big-data-traffic-flow-bench/data
+
+Unpacking it gives you a single `kaggle_public/` directory holding `config/`,
+`corridors/`, `task1/`, `task2/`, `task4/`, `README.md`,
+`sample_submission.csv` and `submission_key.csv`. That directory is the release
+root every script wants. Roughly 13 GB unpacked.
+
 Ten directional corridors, `D7_I10`, `D7_I210`, `D7_I405`, `D12_I5` and
 `D12_I405`, each in both directions. Five-minute resolution, with mainline
 detectors, ramp flows, link geometry, fundamental-diagram parameters, paths and
@@ -361,13 +369,15 @@ More in [`docs/DATA.md`](docs/DATA.md).
 
 ## Quick start
 
+Data and leaderboard: https://www.kaggle.com/competitions/2026-ieee-big-data-traffic-flow-bench
+
 ```bash
 git clone https://github.com/jacky850/trafficflowbench-public.git
 cd trafficflowbench-public
 pip install -r requirements.txt
 
-# replace this with the directory you unpacked the data package into
-REL=/path/to/the/downloaded/data
+# the kaggle_public directory you unpacked, not its parent
+REL=/path/to/kaggle_public
 
 python src/task1/build_task1_baseline_submission.py \
   --release-root $REL --split train --panel D12_I5_N --output state_submission.csv
@@ -375,8 +385,10 @@ python src/task1/score_task1.py \
   --submission state_submission.csv --release-root $REL --split train --panel D12_I5_N
 ```
 
-`$REL` is the directory holding `corridors/`, `task1/` and the rest. If you leave
-the placeholder in, the first command will tell you so.
+`$REL` is the directory holding `corridors/`, `task1/` and the rest. In the
+Kaggle download that is `kaggle_public/`, one level below where you unpacked. If
+you leave the placeholder in, or point at the parent, the first command will
+tell you so.
 
 One corridor runs in minutes. Drop `--panel` for all ten. Tasks 2 and 3 cannot be
 scored locally, because their labels and boundary flows are withheld, so develop

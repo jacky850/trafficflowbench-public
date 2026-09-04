@@ -33,6 +33,9 @@ this repository. Download it and point the scripts at it with `--release-root`.
                         sample_submission_path_flow.csv
 ```
 
+The Kaggle download unpacks to a single `kaggle_public/` directory holding
+everything above. Point `--release-root` at that directory, not at its parent.
+
 ## The three splits
 
 | Split | Dates | Days | Masked inputs | Unmasked observations |

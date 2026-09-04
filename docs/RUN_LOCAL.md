@@ -6,11 +6,15 @@ cd trafficflowbench-public
 pip install -r requirements.txt
 ```
 
-Download the data package from the Kaggle Data page and unpack it anywhere.
-Every script takes `--release-root`. The examples below use `$REL`.
+Download the data package from the Kaggle Data page and unpack it anywhere:
+https://www.kaggle.com/competitions/2026-ieee-big-data-traffic-flow-bench/data
+
+Unpacking gives you a `kaggle_public/` directory. That directory, not its
+parent, is what every script means by `--release-root`. The examples below use
+`$REL`.
 
 ```bash
-REL=/path/to/trafficflowbench-release
+REL=/path/to/kaggle_public
 ```
 
 Add `--panel D12_I5_N` to any command while you iterate. A single corridor runs
