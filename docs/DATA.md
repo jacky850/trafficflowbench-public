@@ -29,7 +29,6 @@ this repository. Download it and point the scripts at it with `--release-root`.
       ramp_states/
   task1/<PANEL>/<split>/sample_submission_state.csv
   task2/<PANEL>/<split>/window_index.csv, window_history.parquet, sample_submission_queue.csv
-  task3/<PANEL>/<split>/sample_submission_physics.csv     (schema reference only)
   task4/<PANEL>/<split>/synthetic_link_counts.csv, synthetic_weak_prior.csv,
                         sample_submission_path_flow.csv
 ```
