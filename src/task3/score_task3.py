@@ -17,6 +17,14 @@ REGIMES = ("R1", "R2", "R3")
 PHYS_COLUMNS = {"panel","timestamp","link_id","mask_regime","speed_kmh","flow_vph",
                 "density_vpkm","inflow_vph","outflow_vph","on_ramp_flow_vph",
                 "off_ramp_flow_vph","on_ramp_valid","off_ramp_valid","accumulation_N"}
+# Zero flow at zero density lies exactly on the fundamental diagram, so a cell
+# claiming an empty road is perfectly self-consistent and vanishes from a ratio
+# normalized by submitted flow. Claiming empty roads used to raise S_FD. The
+# lowest flow anywhere in the withheld data is 347 vph, on corridors busy around
+# the clock, so a panel reporting a fifth of its submitted cells below 50 vph is
+# not modelling traffic and forfeits S_FD.
+EMPTY_FLOOR_VPH = 50.0
+EMPTY_SHARE = 0.20
 
 def published_targets(panel_dir: Path, panel: str, split: str, regime: str) -> set[tuple]:
     """The cells the release actually asks about, read from the published template.
@@ -58,8 +66,8 @@ def state_for_regime(panel: str, panel_dir: Path, split: str, regime: str, state
         base=f[["timestamp","station_id","link_id","speed_kmh","flow_vph"]].rename(columns={"speed_kmh":"true_speed","flow_vph":"true_flow"})
         keys=["timestamp","station_id","link_id"]; pred=f.loc[target,keys].merge(sr,on=keys,how="left",validate="one_to_one"); missing += int(pred.speed_kmh.isna().sum()+pred.flow_vph.isna().sum()); pred["is_target"]=True
         base=base.merge(pred[keys+['speed_kmh','flow_vph','is_target']],on=keys,how='left'); it=base.is_target.astype('boolean').fillna(False).to_numpy(dtype=bool)
-        base["speed_kmh"]=np.where(it,base.speed_kmh,base.true_speed); base["flow_vph"]=np.where(it,base.flow_vph,base.true_flow); pieces.append(base[["timestamp","link_id","speed_kmh","flow_vph"]])
-    if not pieces: return pd.DataFrame(columns=["timestamp","link_id","speed_kmh","flow_vph"]),missing
+        base["speed_kmh"]=np.where(it,base.speed_kmh,base.true_speed); base["flow_vph"]=np.where(it,base.flow_vph,base.true_flow); base["is_target"]=it.astype(float); pieces.append(base[["timestamp","link_id","speed_kmh","flow_vph","is_target"]])
+    if not pieces: return pd.DataFrame(columns=["timestamp","link_id","speed_kmh","flow_vph","is_target"]),missing
     full=pd.concat(pieces,ignore_index=True); return full.groupby(["timestamp","link_id"],as_index=False).mean(numeric_only=True),missing
 
 def read_csv_checked(path: Path, required: set[str], name: str, dedup_keys=None):
@@ -307,6 +315,9 @@ def derive_physics(panel: str, release: Path, split: str, state_panel: pd.DataFr
         "on_ramp_valid": state.on_ramp_valid.astype(int),
         "off_ramp_valid": state.off_ramp_valid.astype(int),
         "accumulation_N": state.accumulation_N,
+        # Which cells the participant supplied, so the empty-road guard below
+        # looks only at submitted values and never at released observations.
+        "is_target": state.is_target if "is_target" in state else 0.0,
     })
     return out, missing
 
@@ -332,6 +343,9 @@ def score_panel(panel, d, release, mode_cfg, regime):
     q_fd = np.where(k_lane <= kcrit_lane, x.free_speed_kmh*k_lane,
                     (cap_lane/np.maximum(kjam_lane-kcrit_lane,1e-9))*np.maximum(kjam_lane-k_lane,0))
     s_fd = float(max(0.0, 1.0 - np.abs(q_lane-q_fd).sum()/(np.abs(q_lane).sum()+1e-9)))
+    submitted = pd.to_numeric(x.is_target, errors="coerce").fillna(0.0).to_numpy() > 0.5 if "is_target" in x else np.zeros(len(x), bool)
+    if submitted.any() and float((x.flow_vph.to_numpy()[submitted] < EMPTY_FLOOR_VPH).mean()) > EMPTY_SHARE:
+        s_fd = 0.0
     mode = str(mode_cfg["panels"][panel]["mode"])
     # Link/time conservation. Mode C excludes links with attached ramps.
     topo_path = release / "corridors" / panel / "network" / "lwr_mainline_topology.csv"
