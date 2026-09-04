@@ -1,12 +1,23 @@
-"""Merge the task-specific submissions into one long-table file.
+"""Build the single upload file from one file per task.
 
-This adapter is deliberately independent of hidden truth.  It validates the
-participant files, adds a globally unique submission_id, and concatenates the
-task rows vertically.
+The leaderboard reads six columns keyed by the organizer's ``submission_id``:
 
-Task 3 is scored on the Task 1 state file and has no submission of its own, so
---physics is optional and left over for internal pipelines that still produce a
-self-contained physics frame.
+    submission_id,task,speed_kmh,flow_vph,queue_pred,path_flow
+
+Working in that shape is awkward, so most people keep one file per task in its
+natural key. This script joins those files onto ``submission_key.csv`` and
+writes the upload file, in template order, with a value in every cell.
+
+Task 3 has no file. It is scored on the Task 1 state rows.
+
+    python src/merge_submissions.py \
+      --state state_submission.csv \
+      --queue queue_submission.csv \
+      --odme  path_flow_submission.csv \
+      --key   submission_key.csv \
+      --output submission.csv
+
+The key file is large, so it is streamed rather than held in memory.
 """
 from __future__ import annotations
 
@@ -15,104 +26,78 @@ from pathlib import Path
 
 import pandas as pd
 
-UNIFIED_COLUMNS = [
-    "submission_id", "task", "panel", "timestamp", "station_id", "link_id", "mask_regime",
-    "window_id", "departure_time", "path_id", "origin_zone", "destination_zone",
-    "speed_kmh", "flow_vph", "density_vpkm", "inflow_vph", "outflow_vph",
-    "on_ramp_flow_vph", "off_ramp_flow_vph", "on_ramp_valid", "off_ramp_valid",
-    "accumulation_N", "queue_pred", "path_flow",
-]
-REQUIRED = {
-    "state": ["panel", "timestamp", "station_id", "link_id", "mask_regime", "speed_kmh", "flow_vph"],
-    "queue": ["window_id", "timestamp", "link_id", "queue_pred"],
-    "physics": [
-        "panel", "timestamp", "link_id", "mask_regime", "speed_kmh", "flow_vph", "density_vpkm",
-        "inflow_vph", "outflow_vph", "on_ramp_flow_vph", "off_ramp_flow_vph",
-        "on_ramp_valid", "off_ramp_valid", "accumulation_N",
-    ],
-    "odme": ["panel", "departure_time", "path_id", "origin_zone", "destination_zone", "path_flow"],
-}
-KEYS = {
-    "state": ["panel", "timestamp", "station_id", "link_id", "mask_regime"],
-    "queue": ["window_id", "timestamp", "link_id"],
-    "physics": ["panel", "timestamp", "link_id", "mask_regime"],
-    "odme": ["panel", "departure_time", "path_id"],
-}
+CHUNK = 1_000_000
+OUT_COLUMNS = ["submission_id", "task", "speed_kmh", "flow_vph", "queue_pred", "path_flow"]
+# The natural key of each per-task file, and the values it supplies.
+KEYS = {"state": ["panel", "timestamp", "station_id", "link_id", "mask_regime"],
+        "queue": ["window_id", "timestamp", "link_id"],
+        "odme": ["panel", "departure_time", "path_id"]}
+VALUES = {"state": ["speed_kmh", "flow_vph"], "queue": ["queue_pred"], "odme": ["path_flow"]}
 
 
-def read_task(path: Path, task: str) -> pd.DataFrame:
+def load(path: Path, task: str) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"{task} submission not found: {path}")
     frame = pd.read_csv(path)
-    missing = sorted(set(REQUIRED[task]) - set(frame.columns))
+    missing = sorted(set(KEYS[task] + VALUES[task]) - set(frame.columns))
     if missing:
-        raise ValueError(f"{task} submission is missing required columns: {missing}")
-    dup = int(frame.duplicated(KEYS[task]).sum())
-    if dup:
-        raise ValueError(f"{task} submission contains {dup} duplicate rows over {KEYS[task]}")
-    if task == "queue":
-        values = pd.to_numeric(frame.queue_pred, errors="coerce")
-        bad = values.notna() & ~values.isin([0, 1])
-        if int(bad.sum()):
-            raise ValueError("queue_pred must contain only binary 0/1 values")
-    if task == "odme":
-        values = pd.to_numeric(frame.path_flow, errors="coerce")
-        if int((values.notna() & (values < 0)).sum()):
-            raise ValueError("path_flow must be nonnegative")
-    return frame
-
-
-def to_unified(frame: pd.DataFrame, task: str) -> pd.DataFrame:
-    out = pd.DataFrame(index=frame.index)
-    for column in UNIFIED_COLUMNS:
-        out[column] = ""
-    out["task"] = task
-    for column in REQUIRED[task]:
-        out[column] = frame[column].to_numpy()
-    if task == "state":
-        out["submission_id"] = (
-            "state:" + frame.panel.astype(str) + ":" + frame.timestamp.astype(str) + ":" +
-            frame.station_id.astype(str) + ":" + frame.link_id.astype(str) + ":" + frame.mask_regime.astype(str)
-        ).to_numpy()
-    elif task == "physics":
-        out["submission_id"] = (
-            "physics:" + frame.panel.astype(str) + ":" + frame.timestamp.astype(str) + ":" +
-            frame.link_id.astype(str) + ":" + frame.mask_regime.astype(str)
-        ).to_numpy()
-    elif task == "queue":
-        out["submission_id"] = (
-            "queue:" + frame.window_id.astype(str) + ":" + frame.timestamp.astype(str) + ":" + frame.link_id.astype(str)
-        ).to_numpy()
-    else:
-        out["submission_id"] = (
-            "odme:" + frame.panel.astype(str) + ":" + frame.departure_time.astype(str) + ":" + frame.path_id.astype(str)
-        ).to_numpy()
-    return out[UNIFIED_COLUMNS]
+        raise ValueError(f"{path} is missing columns: {missing}")
+    frame = frame[KEYS[task] + VALUES[task]].copy()
+    for column in KEYS[task]:
+        frame[column] = (pd.to_datetime(frame[column], utc=True) if column == "timestamp"
+                         else frame[column].astype(str))
+    for column in VALUES[task]:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    duplicated = int(frame.duplicated(KEYS[task]).sum())
+    if duplicated:
+        raise ValueError(f"{path} has {duplicated} duplicate rows over {KEYS[task]}")
+    return frame.set_index(KEYS[task])
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--state", type=Path, required=True)
     ap.add_argument("--queue", type=Path, required=True)
-    ap.add_argument("--physics", type=Path,
-                    help="optional; Task 3 is scored on --state and needs no file of its own")
     ap.add_argument("--odme", type=Path, required=True)
+    ap.add_argument("--key", type=Path, required=True,
+                    help="submission_key.csv, from the same folder as sample_submission.csv")
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
-    frames = [
-        to_unified(read_task(args.state.resolve(), "state"), "state"),
-        to_unified(read_task(args.queue.resolve(), "queue"), "queue"),
-        to_unified(read_task(args.odme.resolve(), "odme"), "odme"),
-    ]
-    if args.physics is not None:
-        frames.insert(2, to_unified(read_task(args.physics.resolve(), "physics"), "physics"))
-    result = pd.concat(frames, ignore_index=True)
-    if result.submission_id.duplicated().any():
-        raise ValueError("merged submission contains duplicate submission_id values")
+
+    tasks = {"state": load(args.state.resolve(), "state"),
+             "queue": load(args.queue.resolve(), "queue"),
+             "odme": load(args.odme.resolve(), "odme")}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    result.to_csv(args.output.resolve(), index=False)
-    print(f"Wrote {len(result):,} rows to {args.output.resolve()}")
-    print(result.groupby("task", sort=True).size().to_string())
+    written, gaps, first = 0, {t: 0 for t in tasks}, True
+    for chunk in pd.read_csv(args.key.resolve(), chunksize=CHUNK, dtype=str):
+        chunk["timestamp"] = pd.to_datetime(chunk.timestamp, utc=True, errors="coerce")
+        out = pd.DataFrame({"submission_id": chunk.submission_id.astype("int64"),
+                            "task": chunk.task.astype(str)})
+        for column in ("speed_kmh", "flow_vph", "queue_pred", "path_flow"):
+            out[column] = 0.0
+        for task, table in tasks.items():
+            rows = out.task == task
+            if not rows.any():
+                continue
+            wanted = pd.MultiIndex.from_frame(chunk.loc[rows, KEYS[task]])
+            found = table.reindex(wanted)
+            for column in VALUES[task]:
+                values = found[column].to_numpy()
+                gaps[task] += int(pd.isna(values).sum())
+                out.loc[rows, column] = pd.Series(values).fillna(0.0).to_numpy()
+        out[OUT_COLUMNS].to_csv(args.output.resolve(), mode="w" if first else "a",
+                                header=first, index=False)
+        first = False
+        written += len(out)
+        print(f"  {written:,} rows", end="\r", flush=True)
+
+    print(f"Wrote {written:,} rows to {args.output.resolve()}")
+    for task, n in gaps.items():
+        if n:
+            print(f"WARNING: {n:,} {task} values had no match and were written as 0. "
+                  f"Check the {KEYS[task]} in your {task} file.")
+    if not any(gaps.values()):
+        print("Every scored cell was filled from your files.")
 
 
 if __name__ == "__main__":
