@@ -18,9 +18,29 @@ PHYS_COLUMNS = {"panel","timestamp","link_id","mask_regime","speed_kmh","flow_vp
                 "density_vpkm","inflow_vph","outflow_vph","on_ramp_flow_vph",
                 "off_ramp_flow_vph","on_ramp_valid","off_ramp_valid","accumulation_N"}
 
+def published_targets(panel_dir: Path, panel: str, split: str, regime: str) -> set[tuple]:
+    """The cells the release actually asks about, read from the published template.
+
+    Not recomputed from stable_mask. The hash draws a slightly larger set than
+    the release publishes, because a cell that falls inside a released Task 2
+    window is dropped from the Task 1 targets: those windows hand out raw
+    observations, so a target inside one would be an answer in plain sight.
+    Deriving the target set from the hash here treated those cells as
+    unanswered, dropped them from the physics field, and scored Task 3 on a
+    field the participant was never asked to produce.
+    """
+    template = panel_dir.parent.parent / "task1" / panel / split / "sample_submission_state.csv"
+    if not template.exists():
+        raise FileNotFoundError(f"Task 1 template not found, needed for the Task 3 target set: {template}")
+    t = pd.read_csv(template, usecols=["timestamp", "station_id", "link_id", "mask_regime"], dtype=str)
+    t = t[t.mask_regime == regime]
+    return set(zip(pd.to_datetime(t.timestamp, utc=True), t.station_id, t.link_id))
+
+
 def state_for_regime(panel: str, panel_dir: Path, split: str, regime: str, state_panel: pd.DataFrame):
     """Reconstruct the complete eligible state using the submitted masked cells."""
     pieces=[]; missing=0
+    targets = published_targets(panel_dir, panel, split, regime)
     sr=state_panel[state_panel.mask_regime==regime][["timestamp","station_id","link_id","speed_kmh","flow_vph"]].copy()
     sr.timestamp=pd.to_datetime(sr.timestamp,utc=True); sr.station_id=sr.station_id.astype(str); sr.link_id=sr.link_id.astype(str)
     for path in files(panel_dir, split):
@@ -33,7 +53,8 @@ def state_for_regime(panel: str, panel_dir: Path, split: str, regime: str, state
         f=f.loc[regime_of_dates(panel, f.date.astype(str))==regime]
         if f.empty: continue
         f.station_id=f.station_id.astype(str); f.link_id=f.link_id.astype(str); raw=f.timestamp.astype(str); f.timestamp=pd.to_datetime(f.timestamp,utc=True)
-        elig=f.is_score_eligible.astype(bool).to_numpy(); f=f.loc[elig].copy(); target=stable_mask(panel,regime,f.date,raw[elig],f.link_id)
+        elig=f.is_score_eligible.astype(bool).to_numpy(); f=f.loc[elig].copy()
+        target=np.fromiter((k in targets for k in zip(f.timestamp,f.station_id,f.link_id)),dtype=bool,count=len(f))
         base=f[["timestamp","station_id","link_id","speed_kmh","flow_vph"]].rename(columns={"speed_kmh":"true_speed","flow_vph":"true_flow"})
         keys=["timestamp","station_id","link_id"]; pred=f.loc[target,keys].merge(sr,on=keys,how="left",validate="one_to_one"); missing += int(pred.speed_kmh.isna().sum()+pred.flow_vph.isna().sum()); pred["is_target"]=True
         base=base.merge(pred[keys+['speed_kmh','flow_vph','is_target']],on=keys,how='left'); it=base.is_target.astype('boolean').fillna(False).to_numpy(dtype=bool)
