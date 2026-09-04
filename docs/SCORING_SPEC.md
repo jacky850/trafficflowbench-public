@@ -115,6 +115,12 @@ The two terms do different jobs, and the weights reflect that. `S_FD` is a
 validity check: it separates the physically possible from the impossible, not the
 good from the better.
 
+Because the ratio normalizes by submitted flow, a cell claiming an empty road is
+both trivially valid and invisible to it, so blanking a submission used to raise
+`S_FD`. A panel and regime whose submitted cells are more than a fifth below
+50 vph now scores `S_FD` 0. Nothing in the released data comes close to that
+floor, so an honest answer is unaffected.
+
 `S_LWR` carries the discrimination. It falls monotonically with injected error
 and sends a congestion-erasing submission to zero. Which
 transitions are scored depends on the corridor's coverage mode, published in

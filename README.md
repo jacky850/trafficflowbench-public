@@ -246,6 +246,12 @@ S_physics = (1/3)*S_FD + (2/3)*S_LWR
 is a validity check rather than a ranking signal, which is why it carries the
 smaller weight. Any plausible answer clears it.
 
+One thing it will not accept is a claim that the road is empty. Zero flow at
+zero density sits exactly on the diagram, so such a cell is trivially valid and
+drops out of the ratio entirely. A panel and regime whose submitted cells are
+more than a fifth below 50 vph therefore scores `S_FD` 0. These corridors are
+busy around the clock and never go near that, so a real answer cannot trip it.
+
 `S_LWR` is where the score is really won. It measures how badly conservation is
 violated, it falls steadily as error grows, and it goes to zero for a
 reconstruction that smooths congestion away. Which link-to-link transitions are

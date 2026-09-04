@@ -83,13 +83,17 @@ python src/task4/build_task4_odme_artifacts.py \
 
 python src/task4/score_task4.py \
   --submission task4_odme/baseline_submission.csv \
-  --release-root $REL --reference-root task4_odme
+  --release-root $REL --split validation
 ```
 
-The builder writes both a submission and a locally derived reference. So this
-score checks that your solver reproduces the released link counts. It is not an
-estimate of the leaderboard, which compares against organizer path flows you do
-not have.
+This reports `S_link` only: your path flows loaded onto the network against the
+published link counts. That is a quarter of Task 4 and the one part computable
+from released data. `S_od`, `S_dev` and `S_attr` compare against organizer path
+flows you do not have, so they are scored on the leaderboard alone.
+
+Do not score yourself against the reference the builder writes. It is a solve
+over `base_od.csv` and the released counts, both of which ship in the package,
+so reproducing it scores a perfect `S_od` locally and tells you nothing.
 
 ## The file you upload
 
@@ -98,8 +102,10 @@ python src/merge_submissions.py \
   --state state_submission.csv \
   --queue queue_submission.csv \
   --odme  task4_odme/baseline_submission.csv \
+  --key   $REL/submission_key.csv \
   --output submission.csv
 ```
 
-Three files in, one long table out. Task 3 contributes no rows: it is scored on
-the Task 1 rows already in the file.
+Three files in, one upload file out, in the six columns the leaderboard reads
+and in template order. Task 3 contributes no rows: it is scored on the Task 1
+rows already in the file.

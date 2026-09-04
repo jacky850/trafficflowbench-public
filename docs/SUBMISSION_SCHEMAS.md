@@ -60,12 +60,16 @@ python src/merge_submissions.py \
   --state   state_submission.csv \
   --queue   queue_submission.csv \
   --odme    path_flow_submission.csv \
+  --key     submission_key.csv \
   --output  submission.csv
 ```
 
-The merged file is a vertical concatenation, not a join: each row keeps its own
-task's key, and `submission_id` is globally unique. The three per-task files
-remain the easiest format for local scoring and debugging.
+`submission_key.csv` ships beside `sample_submission.csv` and maps every
+`submission_id` to the cell it names. The merge joins your three files onto it
+by their natural keys and writes the six columns the leaderboard reads, in
+template order, with a value in every cell. Kaggle rejects a file containing a
+blank. The three per-task files remain the easiest format for local scoring and
+debugging.
 
 ## General rules
 
