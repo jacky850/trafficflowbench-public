@@ -42,6 +42,13 @@ def build_panel_submission(panel: str, release: Path, split: str, output: Path, 
     link_ids = speed_profile["link_ids"]
     link_index = speed_profile["link_index"]
     rows_written = 0
+    template = pd.read_csv(panel_dir.parent.parent / "task1" / panel_dir.name / split /
+                           "sample_submission_state.csv",
+                           usecols=["timestamp", "station_id", "link_id"], dtype=str)
+    # The released files carry the timestamp as text, so match on the text and
+    # never on a parsed value, which would depend on the reader's timezone.
+    template_keys = set(zip(template.timestamp, template.station_id, template.link_id))
+
     for path in masked_files(panel_dir, split):
         frame = pd.read_parquet(
             path,
@@ -69,11 +76,16 @@ def build_panel_submission(panel: str, release: Path, split: str, output: Path, 
             flow_profile["fallback"][safe_li],
             base_flow,
         )
-        valid_base = frame.is_score_eligible.astype(bool).to_numpy()
-        # A target is an eligible cell the release blanked out. One file carries
-        # one regime, so the loop runs once; it stays a loop so a release that
-        # publishes several views of a day still builds correctly.
-        blanked = valid_base & frame.speed_kmh.isna().to_numpy() & frame.flow_vph.isna().to_numpy()
+        # The targets are the rows of the published template, not every blank
+        # cell. Those stopped being the same thing when the Task 2 forecast
+        # horizon was blanked as well: a horizon cell is blank and is not a
+        # Task 1 target. Reading the template also means this cannot drift
+        # from what the leaderboard scores.
+        blanked = np.fromiter(
+            (k in template_keys for k in zip(frame.timestamp.astype(str),
+                                             frame.station_id.astype(str),
+                                             frame.link_id.astype(str))),
+            dtype=bool, count=len(frame))
 
         for regime in pd.unique(frame.mask_regime.astype(str)):
             target = blanked & (frame.mask_regime.astype(str) == regime).to_numpy()

@@ -128,7 +128,10 @@ has removed, using everything else. The rest of the corridor at that moment, the
 same link at other times, and the corridor's own history.
 
 **What you get.** `mainline_states_masked/`, where the target cells are blanked
-to null, plus ramp flows and the full network. The removal rate is one of three
+to null, plus ramp flows and the full network. Not every blank is a target: the
+Task 2 forecast horizon is blanked there too and is not scored for Task 1, so
+take the targets from the template named below rather than by looking for
+nulls. The removal rate is one of three
 regimes. R1 removes 20% of eligible cells, R2 removes 30%, R3 removes 50%. Each
 calendar day is published under exactly one of them.
 
