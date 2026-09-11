@@ -4,18 +4,18 @@
 
 The release ships the masks **already applied**. In
 `corridors/<PANEL>/<split>/mainline_states_masked/` the speed and flow of every
-target cell have been blanked to null. A cell is a Task 1 target when
+target cell have been blanked to null.
 
-```text
-is_score_eligible == True   and   speed_kmh and flow_vph are null
-```
+**Read the targets from the template, not from the nulls.** A blank is not the
+same thing as a target, for two reasons. A cell blank because a detector was
+down carries `is_score_eligible == False`. And around every scored Task 2 window
+the observations are removed for the thirty-minute horizon and the hour that
+follows it, in all four measured channels, on eligible cells that Task 1 does
+not ask about: the horizon is what Task 2 has to predict, so it cannot also ship
+as an observation. Selecting on `is_score_eligible == True and speed_kmh is
+null` therefore returns more rows than the release scores.
 
-Cells that are null because a detector was down are not targets: those carry
-`is_score_eligible == False`. The distinction is the eligibility flag, so read
-it rather than testing for nulls alone.
-
-You do not have to find the targets yourself. Each split publishes the complete
-required row set:
+Each split publishes the complete required row set:
 
 ```text
 task1/<PANEL>/<split>/sample_submission_state.csv
@@ -62,8 +62,14 @@ You can also reproduce the mask yourself rather than read it off the files. Hash
 `panel|regime|date|timestamp|link_id` with blake2b, read the digest as a
 big-endian 64-bit integer, divide by 2^64, and compare against the regime's rate.
 Use the timestamp and date text exactly as stored. `stable_mask()` in
-`src/task1/baseline_task1_historical_mean.py` is the reference implementation,
-and it reproduces the published blanks exactly.
+`src/task1/baseline_task1_historical_mean.py` is the reference implementation.
+
+It reproduces the **mask**, which is not the same as the set of blanks you can
+see in the files. Two things separate them, in opposite directions: the mask is
+drawn over eligible cells only, and cells inside a Task 2 window history are
+excluded from it because that history republishes them, while the blanks also
+cover the Task 2 horizon and its buffer, which are not Task 1 targets. The
+template is the only exact statement of what Task 1 asks for.
 
 ## Coverage and penalties
 
