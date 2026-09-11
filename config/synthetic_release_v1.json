@@ -26,12 +26,7 @@
   "scenario_contract": {
     "capacity_multiplier": 1.2,
     "incident_severity": 1.0,
-    "master_seed_derivation": "stable integer from synthetic_release_v1, panel, split",
-    "child_seed_offsets": {
-      "mainline_observation": 10,
-      "ramp_observation": 11,
-      "task4_prior": 12
-    }
+    "seed_policy": "The scenario seed for validation and private is drawn at random and held by the organizers. It is not derived from anything published here."
   },
   "task2": {
     "conditions": [
