@@ -12,9 +12,9 @@ worth optimizing on its own, but it is a quarter of the Task 4 score and a good
 S_link does not guarantee a good S_ODME.
 
 Do not score yourself against the reference this repository used to build. That
-reference is a regularized solve over base_od.csv and the released counts, both
-of which ship in the public package, so reproducing it scores a perfect S_od
-locally and tells you nothing about the leaderboard.
+reference is a regularized solve over the released weak prior and the released
+counts, both of which ship in the public package, so reproducing it scores a
+perfect S_od locally and tells you nothing about the leaderboard.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def read_submission(path: Path) -> pd.DataFrame:
 
 def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame) -> dict:
     """S_link only: A @ f against the released counts, on the counted links."""
-    path_ids, link_ids, A, paths, base = load_operator(release / "corridors" / panel / "network")
+    path_ids, link_ids, A, paths = load_operator(release / "corridors" / panel / "network")
     count_frame = released_counts(release, panel, split)
     if count_frame is None:
         raise FileNotFoundError(

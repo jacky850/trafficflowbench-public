@@ -78,7 +78,17 @@ def counts_for_split(panel_dir: Path, split: str) -> pd.DataFrame:
     return all_counts.groupby("link_id", as_index=False).flow_vph.mean().rename(columns={"flow_vph": "count"})
 
 
-def load_operator(network: Path) -> tuple[list[str], list[str], np.ndarray, pd.DataFrame, pd.DataFrame]:
+def load_operator(network: Path) -> tuple[list[str], list[str], np.ndarray, pd.DataFrame]:
+    """Path ids, link ids, the incidence operator and the path table.
+
+    The weak prior is deliberately not read here. It used to come from
+    base_od.csv, which is one file per corridor and holds the private month,
+    so every split was regularised toward the private prior and the metric
+    scored S_dev against it on both leaderboards. A participant who used the
+    prior in their own split's folder, which is the one the release documents,
+    was measured against a file they had never been shown. Take the prior from
+    released_prior(release, panel, split).
+    """
     paths = pd.read_csv(network / "path_set.csv")
     paths["path_id"] = paths.path_id.astype(str)
     incidence = pd.read_csv(network / "path_link_incidence.csv")
@@ -92,12 +102,16 @@ def load_operator(network: Path) -> tuple[list[str], list[str], np.ndarray, pd.D
     cc = incidence.path_id.map(path_index).to_numpy(dtype=np.int64)
     A = np.zeros((len(link_ids), len(path_ids)), dtype=np.float64)
     A[rr, cc] = 1.0
-    base = pd.read_csv(network / "base_od.csv")
-    base["path_id"] = base.path_id.astype(str)
-    base = paths[["path_id", "origin_zone", "destination_zone"]].merge(base[["path_id", "departure_time", "base_flow"]], on="path_id", how="left")
-    base = base.set_index("path_id").reindex(path_ids).reset_index()
-    base["base_flow"] = pd.to_numeric(base.base_flow, errors="coerce").fillna(0.0)
-    return path_ids, link_ids, A, paths, base
+    return path_ids, link_ids, A, paths
+
+
+def prior_values(release: Path, panel: str, split: str, path_ids: list[str]) -> np.ndarray:
+    """The split's own released weak prior, in path order, zero where absent."""
+    frame = released_prior(release, panel, split)
+    if frame is None:
+        return np.zeros(len(path_ids), dtype=float)
+    frame = frame.set_index(frame.path_id.astype(str)).reindex(path_ids)
+    return pd.to_numeric(frame.path_flow, errors="coerce").fillna(0.0).to_numpy(dtype=float)
 
 
 def solve(A: np.ndarray, counts: np.ndarray, base: np.ndarray) -> np.ndarray:
@@ -110,8 +124,8 @@ def solve(A: np.ndarray, counts: np.ndarray, base: np.ndarray) -> np.ndarray:
 def build_panel(panel: str, release: Path, output_root: Path, split: str = "validation") -> tuple[int, int]:
     panel_dir = release / "corridors" / panel
     network = panel_dir / "network"
-    path_ids, link_ids, A, paths, base = load_operator(network)
-    base_values = base.base_flow.to_numpy(dtype=float)
+    path_ids, link_ids, A, paths = load_operator(network)
+    base_values = prior_values(release, panel, split, path_ids)
     train_count_frame = released_counts(release, panel, "train")
     if train_count_frame is None:
         train_count_frame = counts_for_split(panel_dir, "train")

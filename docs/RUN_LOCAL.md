@@ -96,7 +96,8 @@ from released data. `S_od`, `S_dev` and `S_attr` compare against organizer path
 flows you do not have, so they are scored on the leaderboard alone.
 
 Do not score yourself against the reference the builder writes. It is a solve
-over `base_od.csv` and the released counts, both of which ship in the package,
+over the split's released weak prior and the released counts, both of which
+ship in the package,
 so reproducing it scores a perfect `S_od` locally and tells you nothing.
 
 ## The file you upload

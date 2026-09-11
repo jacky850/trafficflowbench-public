@@ -18,8 +18,7 @@ not through this repository. Download it and point the scripts at it with `--rel
       ramp_attachment_map.csv     where ramps attach
       path_set.csv                paths, with origin and destination zones
       path_link_incidence.csv     which links each path uses
-      base_od.csv                 the weak OD prior
-    train/
+      train/
       mainline_states/year_month=.../     observations, no Task 1 mask
       mainline_states_masked/mask_regime=R1|R2|R3/
                                           the same, with the Task 1 targets blanked
