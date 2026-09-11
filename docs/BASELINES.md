@@ -58,11 +58,13 @@ ten corridors on the validation split.
 
 | | Naive baseline | Perfect answer |
 |---|---:|---:|
-| `S_state` | 0.6903 | 1.0000 |
-| `S_queue` | 0.2518 | 1.0000 |
-| `S_physics` | 0.3467 | 0.9544 |
-| `S_ODME` | 0.5904 | 1.0000 |
-| **`S_total`** | **0.4872** | **0.9932** |
+| `S_state` | 0.6929 | 1.0000 |
+| `S_queue` | 0.3017 | 1.0000 |
+| `S_physics` | 0.3549 | 0.9636 |
+| `S_ODME` | 0.8359 | 1.0000 |
+| **`S_total`** | **0.5534** | **0.9945** |
+
+An empty submission scores 0.0000, not a small positive number.
 
 Two things to read from this table. The gap between the columns is the room a
 method has to work in, and it is wide in every task. And `S_physics` does not
