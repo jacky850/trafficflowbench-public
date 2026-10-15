@@ -82,9 +82,10 @@ def main() -> None:
     template["window_id"] = template.window_id.astype(str)
     template["link_id"] = template.link_id.astype(str)
     template["timestamp"] = pd.to_datetime(template.timestamp, utc=True)
-    # Persistence must use only the released [T-60, T) window history.  The
-    # old implementation re-read the corridor state at T, which is not part
-    # of the Task 2 participant contract and leaked one extra observation.
+    # Persistence reads only the released window history, [T-60, T), and
+    # repeats its last step, T-5.  This is more conservative than the rules
+    # require: the row at T in mainline_states_masked is released data
+    # stamped at T, and a submission may use it.
     history = read_window_history(root, splits)
     history["window_id"] = history.window_id.astype(str)
     history["timestamp"] = pd.to_datetime(history.timestamp, utc=True)

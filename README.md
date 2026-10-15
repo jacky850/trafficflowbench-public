@@ -172,10 +172,10 @@ python src/task1/score_task1.py \
 that is already there, but whether you can tell where it goes next, and where a
 new one is about to form.
 
-**What you get.** Independent windows. Each gives you 60 minutes of observations
-up to a forecast origin `T`, and asks about `T+5` through `T+30`. That is six
-five-minute steps over every link. Windows come in two conditions, five of each
-per corridor and split:
+**What you get.** Independent windows. Each gives you the 60 minutes of
+observations before a forecast origin `T`, and asks about `T+5` through `T+30`.
+That is six five-minute steps over every link. The released row at `T` may also
+be used. Windows come in two conditions, five of each per corridor and split:
 
 - `queue_onset`, where nothing is queued in the history and a queue appears in
   the horizon;

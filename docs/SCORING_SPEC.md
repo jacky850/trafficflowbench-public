@@ -51,8 +51,9 @@ defined in [`MASK_SPEC.md`](MASK_SPEC.md).
 
 ## Task 2: queue forecasting
 
-You see 60 minutes of history through the forecast origin `T` and predict a
-binary queue indicator for `T+5 … T+30`. Per window:
+You see the 60 minutes of history before the forecast origin `T`, from `T-60`
+to `T-5`, and predict a binary queue indicator for `T+5 … T+30`. The released
+row at `T` itself may also be used. Per window:
 
 ```text
 IoU = |Qpred AND Qtrue| / |Qpred OR Qtrue|
@@ -63,7 +64,7 @@ The two conditions, `queue_onset` and `queue_ongoing`, carry equal weight. Each
 contributes 5 windows per corridor and split.
 
 `queue_onset` windows have no queue visible in the history and a queue in the
-horizon. `queue_ongoing` windows already show a queue at the origin. Both
+horizon. `queue_ongoing` windows already show a queue in the history. Both
 require a queue somewhere in the horizon, so an empty-empty window cannot be
 drawn as a free mark. Origins within a `(panel, split, condition)` group are at
 least 360 minutes apart. The condition label is derived only from the history

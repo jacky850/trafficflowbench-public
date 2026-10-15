@@ -25,8 +25,9 @@ structural Kalman filter per link.
 ## Task 2: persistence
 
 `src/task2/build_task2_persistence_submission.py` reads the queue state at the
-forecast origin and repeats it through all six future cells. It uses only the
-released 60-minute history and never touches a future label.
+last step of the released history, `T-5`, and repeats it through all six future
+cells. It uses only the released 60-minute history and never touches a future
+label. The rules also allow the row at `T`; the baseline simply does not use it.
 
 ```bash
 python src/task2/build_task2_persistence_submission.py \
