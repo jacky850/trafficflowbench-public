@@ -72,13 +72,27 @@ def score_panel(panel: str, release: Path, split: str, submission: pd.DataFrame)
         sub = sub[sub.departure_time == str(prior.departure_time.iloc[0])]
     duplicate = int(sub.duplicated(["path_id"]).sum())
     missing = int(pd.Index(path_ids).difference(sub.path_id).size)
-    f = sub.set_index("path_id").reindex(path_ids)["path_flow"].to_numpy(dtype=float) \
-        if len(sub) else np.full(len(path_ids), np.nan)
-    invalid = int((~np.isfinite(f) | (f < 0)).sum())
+    unknown = int(pd.Index(sub.path_id).difference(path_ids).size)
     row = {"level": "panel", "panel": panel, "family_id": None, "n_paths": len(path_ids),
            "n_counted_links": len(scored_links), "missing_paths": missing,
-           "duplicate_rows": duplicate, "invalid_rows": invalid}
-    if duplicate or missing or invalid:
+           "duplicate_rows": duplicate, "invalid_rows": unknown}
+    # Reject duplicate path ids before reindex: pandas raises instead of
+    # producing the affected corridor's documented zero score.
+    if duplicate:
+        return {**row, "S_link": 0.0}
+    ordered = sub.set_index("path_id").reindex(path_ids)
+    f = ordered["path_flow"].to_numpy(dtype=float)
+    invalid = int((~np.isfinite(f) | (f < 0)).sum())
+    # Path ids do not excuse inconsistent OD zones. Compare text ids, just as
+    # read_submission does, because network CSVs may infer numeric zone ids.
+    expected_zones = paths.set_index("path_id").reindex(path_ids)
+    present = pd.Index(path_ids).isin(sub.path_id)
+    wrong_zones = np.zeros(len(path_ids), dtype=bool)
+    for zone in ("origin_zone", "destination_zone"):
+        wrong_zones |= present & (ordered[zone].astype(str).to_numpy() !=
+                                  expected_zones[zone].astype(str).to_numpy())
+    row["invalid_rows"] = invalid + unknown + int(wrong_zones.sum())
+    if missing or row["invalid_rows"]:
         return {**row, "S_link": 0.0}
     loaded = A_score @ f
     denom = max(float(np.sum(counts)), 1e-9)
